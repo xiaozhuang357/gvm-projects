@@ -12,9 +12,7 @@
 <?import javafx.scene.text.Font?>
 <?import javafx.scene.text.Text?>
 
-
-<AnchorPane prefHeight="400.0" prefWidth="600.0" xmlns="http://javafx.com/javafx/25" xmlns:fx="http://javafx.com/fxml/1"
-            fx:controller="com._404.wms.LoginController">
+<AnchorPane prefHeight="400.0" prefWidth="600.0" xmlns="http://javafx.com/javafx/25" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com._404.wms.LoginController">
    <children>
       <BorderPane prefHeight="400.0" prefWidth="600.0">
          <top>
@@ -48,8 +46,14 @@
                         <Font size="36.0" />
                      </font>
                   </Text>
-                  <TextField fx:id="usernameField" prefHeight="45.0" prefWidth="200.0" promptText="请输入用户名" GridPane.columnIndex="1" />
-                  <TextField fx:id="passwordField" prefHeight="41.0" prefWidth="200.0" promptText="请输入密码" GridPane.columnIndex="1" GridPane.rowIndex="1" />
+                  <TextField fx:id="usernameField" prefHeight="40.0" prefWidth="200.0" promptText="请输入用户名" GridPane.columnIndex="1">
+                     <font>
+                        <Font size="18.0" />
+                     </font></TextField>
+                  <TextField fx:id="passwordField" prefHeight="40.0" prefWidth="200.0" promptText="请输入密码" GridPane.columnIndex="1" GridPane.rowIndex="1">
+                     <font>
+                        <Font size="18.0" />
+                     </font></TextField>
                </children>
             </GridPane>
          </center>
