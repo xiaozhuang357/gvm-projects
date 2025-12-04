@@ -1,0 +1,24 @@
+package com._404.wms;
+
+import javafx.event.ActionEvent;
+import javafx.fxml.FXML;
+import javafx.scene.control.Button;
+import javafx.scene.control.TextField;
+
+public class LoginController {
+	
+	@FXML
+	private Button loginButton;
+	
+	@FXML
+	private TextField passwordField;
+	
+	@FXML
+	private TextField usernamefField;
+	
+	@FXML
+	void login(ActionEvent event) {
+	
+	}
+	
+}
