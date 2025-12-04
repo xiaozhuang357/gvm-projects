@@ -14,7 +14,7 @@ public class LoginController {
 	private TextField passwordField;
 	
 	@FXML
-	private TextField usernamefField;
+	private TextField usernameField;
 	
 	@FXML
 	void login(ActionEvent event) {
