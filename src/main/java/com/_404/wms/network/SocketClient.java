@@ -4,6 +4,8 @@ import com._404.wms.model.User;
 
 import java.io.*;
 import java.net.Socket;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Socket客户端工具类 - 封装与服务器的通信
@@ -91,7 +93,7 @@ public class SocketClient {
      * 登录
      */
     public Message login(String username, String password) {
-        java.util.Map<String, String> credentials = new java.util.HashMap<>();
+        Map<String, String> credentials = new HashMap<>();
         credentials.put("username", username);
         credentials.put("password", password);
 
@@ -144,7 +146,7 @@ public class SocketClient {
      * 拒绝采购订单
      */
     public Message rejectPurchaseOrder(String orderId, String reason) {
-        java.util.Map<String, String> data = new java.util.HashMap<>();
+        Map<String, String> data = new HashMap<>();
         data.put("orderId", orderId);
         data.put("reason", reason);
 

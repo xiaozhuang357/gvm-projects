@@ -22,15 +22,19 @@ import javafx.scene.layout.BorderPane;
 import javafx.scene.text.Text;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
-
 import java.io.File;
 import java.io.IOException;
 import java.net.URL;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.ResourceBundle;
+
+import javafx.beans.property.SimpleDoubleProperty;
+import javafx.beans.property.SimpleIntegerProperty;
+import javafx.beans.property.SimpleStringProperty;
 
 public class ManagerController implements Initializable {
 
@@ -38,7 +42,7 @@ public class ManagerController implements Initializable {
 	private SocketClient socketClient;
 
 	// 缓存所有订单数据
-	private List<PurchaseOrder> allOrders = new java.util.ArrayList<>();
+	private List<PurchaseOrder> allOrders = new ArrayList<>();
 	private ObservableList<ApprovalTask> allTasks = FXCollections.observableArrayList();
 	private FilteredList<ApprovalTask> filteredTasks = new FilteredList<>(allTasks, task -> true);
 
@@ -330,22 +334,22 @@ public class ManagerController implements Initializable {
 	 */
 	private void initializeReportTableData() {
 		dateColumn.setCellValueFactory(
-				cellData -> new javafx.beans.property.SimpleStringProperty(cellData.getValue().getDate()));
+				cellData -> new SimpleStringProperty(cellData.getValue().getDate()));
 		categoryColumn.setCellValueFactory(
-				cellData -> new javafx.beans.property.SimpleStringProperty(cellData.getValue().getCategory()));
+				cellData -> new SimpleStringProperty(cellData.getValue().getCategory()));
 		productNameColumn.setCellValueFactory(
-				cellData -> new javafx.beans.property.SimpleStringProperty(cellData.getValue().getProductName()));
+				cellData -> new SimpleStringProperty(cellData.getValue().getProductName()));
 		quantityColumn.setCellValueFactory(
-				cellData -> new javafx.beans.property.SimpleIntegerProperty(cellData.getValue().getQuantity())
+				cellData -> new SimpleIntegerProperty(cellData.getValue().getQuantity())
 						.asObject());
 		unitPriceColumn.setCellValueFactory(
-				cellData -> new javafx.beans.property.SimpleDoubleProperty(cellData.getValue().getUnitPrice())
+				cellData -> new SimpleDoubleProperty(cellData.getValue().getUnitPrice())
 						.asObject());
 		totalAmountColumn.setCellValueFactory(
-				cellData -> new javafx.beans.property.SimpleDoubleProperty(cellData.getValue().getTotalAmount())
+				cellData -> new SimpleDoubleProperty(cellData.getValue().getTotalAmount())
 						.asObject());
 		statusColumn.setCellValueFactory(
-				cellData -> new javafx.beans.property.SimpleStringProperty(cellData.getValue().getStatus()));
+				cellData -> new SimpleStringProperty(cellData.getValue().getStatus()));
 
 		// 添加示例数据
 		ObservableList<ReportData> data = FXCollections.observableArrayList(
@@ -361,21 +365,21 @@ public class ManagerController implements Initializable {
 	 */
 	private void initializeApprovalTableData() {
 		approvalIdColumn.setCellValueFactory(
-				cellData -> new javafx.beans.property.SimpleStringProperty(cellData.getValue().getId()));
+				cellData -> new SimpleStringProperty(cellData.getValue().getId()));
 		approvalTypeColumn.setCellValueFactory(
-				cellData -> new javafx.beans.property.SimpleStringProperty(cellData.getValue().getType()));
+				cellData -> new SimpleStringProperty(cellData.getValue().getType()));
 		applicantColumn.setCellValueFactory(
-				cellData -> new javafx.beans.property.SimpleStringProperty(cellData.getValue().getApplicant()));
+				cellData -> new SimpleStringProperty(cellData.getValue().getApplicant()));
 		approvalTitleColumn.setCellValueFactory(
-				cellData -> new javafx.beans.property.SimpleStringProperty(cellData.getValue().getTitle()));
+				cellData -> new SimpleStringProperty(cellData.getValue().getTitle()));
 		approvalAmountColumn.setCellValueFactory(
-				cellData -> new javafx.beans.property.SimpleDoubleProperty(cellData.getValue().getAmount()).asObject());
+				cellData -> new SimpleDoubleProperty(cellData.getValue().getAmount()).asObject());
 		applyDateColumn.setCellValueFactory(
-				cellData -> new javafx.beans.property.SimpleStringProperty(cellData.getValue().getApplyDate()));
+				cellData -> new SimpleStringProperty(cellData.getValue().getApplyDate()));
 		priorityColumn.setCellValueFactory(
-				cellData -> new javafx.beans.property.SimpleStringProperty(cellData.getValue().getPriority()));
+				cellData -> new SimpleStringProperty(cellData.getValue().getPriority()));
 		approvalStatusColumn.setCellValueFactory(
-				cellData -> new javafx.beans.property.SimpleStringProperty(cellData.getValue().getStatus()));
+				cellData -> new SimpleStringProperty(cellData.getValue().getStatus()));
 
 		approvalTableView.setItems(filteredTasks);
 	}

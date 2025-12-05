@@ -2,6 +2,7 @@ module com._404.wms {
 	requires javafx.controls;
 	requires javafx.fxml;
 	requires transitive javafx.graphics;
+	requires javafx.base;
 
 	opens com._404.wms to javafx.fxml;
 
