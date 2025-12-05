@@ -1,0 +1,237 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import javafx.scene.text.Font?>
+<?import javafx.scene.text.Text?>
+<?import java.lang.String?>
+
+<BorderPane prefHeight="800.0" prefWidth="1400.0" xmlns="http://javafx.com/javafx/21"
+    xmlns:fx="http://javafx.com/fxml/1" fx:controller="com._404.wms.PurchaserController">
+    <!-- 顶部栏 -->
+    <top>
+        <HBox alignment="CENTER_LEFT" style="-fx-background-color: #16a085; -fx-padding: 15px;">
+            <Text fill="WHITE" text="仓库管理系统 - 采购员工作台">
+                <font>
+                    <Font name="Microsoft YaHei Bold" size="24.0" />
+                </font>
+            </Text>
+            <Region HBox.hgrow="ALWAYS" />
+            <Label fx:id="userInfoLabel" text="当前用户: " textFill="WHITE">
+                <font>
+                    <Font size="16.0" />
+                </font>
+            </Label>
+            <Button fx:id="logoutButton" mnemonicParsing="false" onAction="#handleLogout"
+                style="-fx-background-color: #c0392b; -fx-text-fill: white; -fx-font-size: 14px; -fx-cursor: hand;"
+                text="退出登录">
+                <HBox.margin>
+                    <Insets left="20.0" />
+                </HBox.margin>
+            </Button>
+        </HBox>
+    </top>
+
+    <!-- 左侧菜单 -->
+    <left>
+        <VBox style="-fx-background-color: #1abc9c; -fx-padding: 10px;"
+            BorderPane.alignment="CENTER">
+            <Button fx:id="createOrderMenuButton" mnemonicParsing="false"
+                onAction="#showCreateOrder" prefWidth="180.0"
+                style="-fx-background-color: #27ae60; -fx-text-fill: white; -fx-font-size: 16px; -fx-cursor: hand; -fx-padding: 15px;"
+                text="创建采购订单">
+                <VBox.margin>
+                    <Insets bottom="10.0" />
+                </VBox.margin>
+            </Button>
+            <Button fx:id="orderListMenuButton" mnemonicParsing="false" onAction="#showOrderList"
+                prefWidth="180.0"
+                style="-fx-background-color: #27ae60; -fx-text-fill: white; -fx-font-size: 16px; -fx-cursor: hand; -fx-padding: 15px;"
+                text="我的订单">
+                <VBox.margin>
+                    <Insets bottom="10.0" />
+                </VBox.margin>
+            </Button>
+            <Button fx:id="productListMenuButton" mnemonicParsing="false"
+                onAction="#showProductList" prefWidth="180.0"
+                style="-fx-background-color: #27ae60; -fx-text-fill: white; -fx-font-size: 16px; -fx-cursor: hand; -fx-padding: 15px;"
+                text="产品目录">
+                <VBox.margin>
+                    <Insets bottom="10.0" />
+                </VBox.margin>
+            </Button>
+        </VBox>
+    </left>
+
+    <!-- 中心内容区 -->
+    <center>
+        <StackPane fx:id="contentPane" BorderPane.alignment="CENTER">
+            <!-- 创建采购订单面板 -->
+            <VBox fx:id="createOrderPane" spacing="20.0" style="-fx-padding: 30px;" visible="true">
+                <Text text="创建采购订单">
+                    <font>
+                        <Font name="Microsoft YaHei Bold" size="28.0" />
+                    </font>
+                </Text>
+
+                <GridPane hgap="15.0" vgap="15.0">
+                    <columnConstraints>
+                        <ColumnConstraints hgrow="SOMETIMES" minWidth="120.0" />
+                        <ColumnConstraints hgrow="SOMETIMES" minWidth="300.0" />
+                    </columnConstraints>
+
+                    <Label text="采购订单编号:" GridPane.columnIndex="0" GridPane.rowIndex="0">
+                        <font>
+                            <Font size="14.0" />
+                        </font>
+                    </Label>
+                    <TextField fx:id="orderIdField" editable="false" promptText="自动生成"
+                        GridPane.columnIndex="1" GridPane.rowIndex="0" />
+
+                    <Label text="供应商:" GridPane.columnIndex="0" GridPane.rowIndex="1">
+                        <font>
+                            <Font size="14.0" />
+                        </font>
+                    </Label>
+                    <TextField fx:id="supplierField" promptText="请输入供应商名称" GridPane.columnIndex="1"
+                        GridPane.rowIndex="1" />
+
+                    <Label text="预计交货日期:" GridPane.columnIndex="0" GridPane.rowIndex="2">
+                        <font>
+                            <Font size="14.0" />
+                        </font>
+                    </Label>
+                    <DatePicker fx:id="deliveryDatePicker" GridPane.columnIndex="1"
+                        GridPane.rowIndex="2" />
+
+                    <Label text="备注说明:" GridPane.columnIndex="0" GridPane.rowIndex="3">
+                        <font>
+                            <Font size="14.0" />
+                        </font>
+                    </Label>
+                    <TextArea fx:id="orderRemarkArea" prefHeight="80.0" promptText="订单备注信息"
+                        wrapText="true" GridPane.columnIndex="1" GridPane.rowIndex="3" />
+                </GridPane>
+
+                <!-- 采购明细 -->
+                <VBox spacing="10.0">
+                    <HBox alignment="CENTER_LEFT" spacing="15.0">
+                        <Text text="采购明细">
+                            <font>
+                                <Font size="18.0" />
+                            </font>
+                        </Text>
+                        <Region HBox.hgrow="ALWAYS" />
+                        <Button onAction="#handleAddOrderItem"
+                            style="-fx-background-color: #3498db; -fx-text-fill: white;"
+                            text="+ 添加产品" />
+                    </HBox>
+
+                    <TableView fx:id="orderItemTableView" prefHeight="300.0">
+                        <columns>
+                            <TableColumn fx:id="itemProductColumn" prefWidth="150.0" text="产品名称" />
+                            <TableColumn fx:id="itemPriceColumn" prefWidth="100.0" text="单价" />
+                            <TableColumn fx:id="itemQuantityColumn" prefWidth="100.0" text="数量" />
+                            <TableColumn fx:id="itemSubtotalColumn" prefWidth="120.0" text="小计" />
+                            <TableColumn fx:id="itemActionColumn" prefWidth="100.0" text="操作" />
+                        </columns>
+                    </TableView>
+                </VBox>
+
+                <!-- 总金额 -->
+                <HBox alignment="CENTER_RIGHT" spacing="20.0" style="-fx-padding: 10px;">
+                    <Text text="订单总金额:">
+                        <font>
+                            <Font size="18.0" />
+                        </font>
+                    </Text>
+                    <Text fx:id="totalAmountText" fill="#e74c3c" text="¥0.00">
+                        <font>
+                            <Font name="Microsoft YaHei Bold" size="24.0" />
+                        </font>
+                    </Text>
+                </HBox>
+
+                <!-- 提交按钮 -->
+                <HBox alignment="CENTER" spacing="20.0" style="-fx-padding-top: 20px;">
+                    <Button onAction="#handleSubmitOrder"
+                        style="-fx-background-color: #27ae60; -fx-text-fill: white; -fx-font-size: 16px; -fx-padding: 12px 40px; -fx-cursor: hand;"
+                        text="提交订单" />
+                    <Button onAction="#handleClearOrder"
+                        style="-fx-background-color: #95a5a6; -fx-text-fill: white; -fx-font-size: 16px; -fx-padding: 12px 40px; -fx-cursor: hand;"
+                        text="清空" />
+                </HBox>
+            </VBox>
+
+            <!-- 我的订单列表面板 -->
+            <VBox fx:id="orderListPane" spacing="20.0" style="-fx-padding: 30px;" visible="false">
+                <HBox alignment="CENTER_LEFT" spacing="20.0">
+                    <Text text="我的采购订单">
+                        <font>
+                            <Font name="Microsoft YaHei Bold" size="28.0" />
+                        </font>
+                    </Text>
+                    <Region HBox.hgrow="ALWAYS" />
+                    <Button onAction="#handleRefreshOrders"
+                        style="-fx-background-color: #3498db; -fx-text-fill: white;" text="刷新" />
+                </HBox>
+
+                <!-- 订单筛选 -->
+                <HBox spacing="15.0">
+                    <Label text="订单状态:">
+                        <font>
+                            <Font size="14.0" />
+                        </font>
+                    </Label>
+                    <ComboBox fx:id="orderStatusCombo" prefWidth="150.0" promptText="选择状态" />
+                    <Button onAction="#handleFilterOrders"
+                        style="-fx-background-color: #2c3e50; -fx-text-fill: white;" text="筛选" />
+                    <Button onAction="#handleExportOrders"
+                        style="-fx-background-color: #27AE60; -fx-text-fill: white;" text="导出报表" />
+                </HBox>
+
+                <!-- 订单列表 -->
+                <TableView fx:id="orderTableView" VBox.vgrow="ALWAYS">
+                    <columns>
+                        <TableColumn fx:id="orderIdColumn" prefWidth="150.0" text="订单编号" />
+                        <TableColumn fx:id="supplierColumn" prefWidth="120.0" text="供应商" />
+                        <TableColumn fx:id="totalAmountColumn" prefWidth="120.0" text="订单金额" />
+                        <TableColumn fx:id="orderStatusColumn" prefWidth="120.0" text="订单状态" />
+                        <TableColumn fx:id="createTimeColumn" prefWidth="150.0" text="创建时间" />
+                        <TableColumn fx:id="deliveryDateColumn" prefWidth="120.0" text="预计交货" />
+                        <TableColumn fx:id="orderActionColumn" prefWidth="150.0" text="操作" />
+                    </columns>
+                </TableView>
+            </VBox>
+
+            <!-- 产品目录面板 -->
+            <VBox fx:id="productListPane" spacing="20.0" style="-fx-padding: 30px;" visible="false">
+                <HBox alignment="CENTER_LEFT" spacing="20.0">
+                    <Text text="产品目录">
+                        <font>
+                            <Font name="Microsoft YaHei Bold" size="28.0" />
+                        </font>
+                    </Text>
+                    <Region HBox.hgrow="ALWAYS" />
+                    <TextField fx:id="productSearchField" prefWidth="200.0" promptText="搜索产品..." />
+                    <Button onAction="#handleSearchProduct"
+                        style="-fx-background-color: #3498db; -fx-text-fill: white;" text="搜索" />
+                </HBox>
+
+                <!-- 产品列表 -->
+                <TableView fx:id="productTableView" VBox.vgrow="ALWAYS">
+                    <columns>
+                        <TableColumn fx:id="productIdColumn" prefWidth="120.0" text="产品编号" />
+                        <TableColumn fx:id="productNameColumn" prefWidth="180.0" text="产品名称" />
+                        <TableColumn fx:id="categoryColumn" prefWidth="100.0" text="类别" />
+                        <TableColumn fx:id="priceColumn" prefWidth="100.0" text="单价" />
+                        <TableColumn fx:id="stockColumn" prefWidth="100.0" text="库存" />
+                        <TableColumn fx:id="unitColumn" prefWidth="80.0" text="单位" />
+                        <TableColumn fx:id="supplierNameColumn" prefWidth="150.0" text="供应商" />
+                    </columns>
+                </TableView>
+            </VBox>
+        </StackPane>
+    </center>
+</BorderPane>

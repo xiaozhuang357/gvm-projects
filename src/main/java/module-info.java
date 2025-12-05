@@ -1,16 +1,12 @@
 module com._404.wms {
 	requires javafx.controls;
 	requires javafx.fxml;
-	requires javafx.web;
-	
-	requires org.controlsfx.controls;
-	requires com.dlsc.formsfx;
-	requires net.synedra.validatorfx;
-	requires org.kordamp.ikonli.javafx;
-	requires org.kordamp.bootstrapfx.core;
-	requires eu.hansolo.tilesfx;
-	requires com.almasb.fxgl.all;
-	
+	requires transitive javafx.graphics;
+
 	opens com._404.wms to javafx.fxml;
+
 	exports com._404.wms;
+	exports com._404.wms.model;
+	exports com._404.wms.network;
+	exports com._404.wms.service;
 }
