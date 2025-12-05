@@ -150,6 +150,25 @@ public class ManagerController implements Initializable {
 			if (order.getStatus() == PurchaseOrder.OrderStatus.PENDING_DEPT_APPROVAL ||
 					order.getStatus() == PurchaseOrder.OrderStatus.PENDING_GENERAL_APPROVAL) {
 
+				// 根据用户角色和订单金额过滤
+				// 部门经理只能审批金额 < 50000 的订单（待部门审批）
+				// 总经理只能审批金额 >= 50000 的订单（待总经理审批）
+				if (currentUser != null) {
+					if (currentUser.getRole() == User.UserRole.DEPARTMENT_MANAGER) {
+						// 部门经理只看金额小于50000且状态为待部门审批的订单
+						if (order.getTotalAmount() >= 50000 ||
+								order.getStatus() != PurchaseOrder.OrderStatus.PENDING_DEPT_APPROVAL) {
+							continue;
+						}
+					} else if (currentUser.getRole() == User.UserRole.GENERAL_MANAGER) {
+						// 总经理只看金额大于等于50000且状态为待总经理审批的订单
+						if (order.getTotalAmount() < 50000 ||
+								order.getStatus() != PurchaseOrder.OrderStatus.PENDING_GENERAL_APPROVAL) {
+							continue;
+						}
+					}
+				}
+
 				ApprovalTask task = new ApprovalTask(
 						order.getOrderId(),
 						"采购申请",
