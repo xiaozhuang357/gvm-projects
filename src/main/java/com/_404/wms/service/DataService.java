@@ -10,9 +10,12 @@ import java.util.stream.Collectors;
 
 /**
  * 数据服务类 - 管理所有业务数据
+ * 采用混合存储模式：
+ * 1. 用户数据：存储在 MySQL 数据库中
+ * 2. 业务数据（商品、订单等）：存储在本地文件系统 (序列化对象)
  */
 public class DataService {
-    // private Map<String, User> users; // Removed in favor of MysqlMgr
+    // 内存缓存，用于快速访问业务数据
     private Map<String, Product> products;
     private Map<String, PurchaseOrder> purchaseOrders;
     private List<StockInRecord> stockInRecords;
@@ -23,7 +26,7 @@ public class DataService {
     private MysqlMgr mysqlMgr;
 
     public DataService() {
-        // this.users = new ConcurrentHashMap<>();
+        // 初始化内存数据结构
         this.products = new ConcurrentHashMap<>();
         this.purchaseOrders = new ConcurrentHashMap<>();
         this.stockInRecords = Collections.synchronizedList(new ArrayList<>());
@@ -31,16 +34,17 @@ public class DataService {
         this.logs = Collections.synchronizedList(new ArrayList<>());
 
         try {
+            // 获取数据库管理器实例
             this.mysqlMgr = MysqlMgr.getInstance();
         } catch (Exception e) {
             System.err.println("Failed to initialize MysqlMgr: " + e.getMessage());
             e.printStackTrace();
         }
 
-        // 创建数据目录
+        // 创建本地数据存储目录
         new File(DATA_DIR).mkdirs();
 
-        // 尝试加载数据
+        // 从文件系统加载历史数据
         loadData();
     }
 

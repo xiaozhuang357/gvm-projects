@@ -108,7 +108,8 @@ public class WMSServer {
     }
 
     /**
-     * 客户端处理器
+     * 客户端处理器线程
+     * 负责维护与单个客户端的长连接，处理请求并发送响应
      */
     private class ClientHandler implements Runnable {
         private Socket socket;
@@ -124,11 +125,14 @@ public class WMSServer {
         @Override
         public void run() {
             try {
+                // 初始化对象输出流（必须先于输入流创建，以写入流头）
                 out = new ObjectOutputStream(socket.getOutputStream());
                 out.flush(); // 立即刷新，发送流头部信息
+                // 初始化对象输入流
                 in = new ObjectInputStream(socket.getInputStream());
 
                 Message message;
+                // 循环读取客户端发送的消息对象
                 while ((message = (Message) in.readObject()) != null) {
                     handleMessage(message);
                 }

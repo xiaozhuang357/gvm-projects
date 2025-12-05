@@ -688,17 +688,35 @@ public class PurchaserController implements Initializable {
 
         confirm.showAndWait().ifPresent(response -> {
             if (response == ButtonType.OK) {
-                socketClient.logout();
-                socketClient.disconnect();
-
-                Stage stage = (Stage) logoutButton.getScene().getWindow();
-                stage.close();
-
-                try {
-                    new LoginApplication().start(new Stage());
-                } catch (Exception e) {
-                    e.printStackTrace();
+                if (logoutButton != null) {
+                    logoutButton.setDisable(true);
                 }
+
+                new Thread(() -> {
+                    try {
+                        if (socketClient != null) {
+                            socketClient.logout();
+                            socketClient.disconnect();
+                        }
+                    } catch (Exception e) {
+                        System.err.println("Logout error: " + e.getMessage());
+                    } finally {
+                        Platform.runLater(() -> {
+                            if (logoutButton != null && logoutButton.getScene() != null) {
+                                Stage stage = (Stage) logoutButton.getScene().getWindow();
+                                if (stage != null) {
+                                    stage.close();
+                                }
+                            }
+
+                            try {
+                                new LoginApplication().start(new Stage());
+                            } catch (Exception e) {
+                                e.printStackTrace();
+                            }
+                        });
+                    }
+                }).start();
             }
         });
     }
