@@ -1,5 +1,6 @@
 package com._404.wms.network;
 
+import com._404.wms.config.ConfigManager;
 import com._404.wms.model.User;
 
 import java.io.*;
@@ -11,8 +12,11 @@ import java.util.Map;
  * Socket客户端工具类 - 封装与服务器的通信
  */
 public class SocketClient {
-    private static final String SERVER_HOST = "localhost";
-    private static final int SERVER_PORT = 8888;
+    private static final String DEFAULT_HOST = "localhost";
+    private static final int DEFAULT_PORT = 8888;
+
+    private final String serverHost;
+    private final int serverPort;
 
     private Socket socket;
     private ObjectOutputStream out;
@@ -22,6 +26,22 @@ public class SocketClient {
 
     public SocketClient() {
         this.connected = false;
+        // 从配置文件读取服务器地址和端口
+        ConfigManager config = ConfigManager.getInstance();
+        this.serverHost = config.getValue("Server", "Host", DEFAULT_HOST);
+        this.serverPort = config.getIntValue("Server", "Port", DEFAULT_PORT);
+    }
+
+    /**
+     * 使用指定的服务器地址和端口创建客户端
+     * 
+     * @param host 服务器地址
+     * @param port 服务器端口
+     */
+    public SocketClient(String host, int port) {
+        this.connected = false;
+        this.serverHost = host;
+        this.serverPort = port;
     }
 
     /**
@@ -29,19 +49,33 @@ public class SocketClient {
      */
     public boolean connect() {
         try {
-            socket = new Socket(SERVER_HOST, SERVER_PORT);
+            socket = new Socket(serverHost, serverPort);
             socket.setSoTimeout(10000); // 设置10秒超时，避免无限阻塞
             out = new ObjectOutputStream(socket.getOutputStream());
             out.flush(); // 立即刷新，发送流头部信息
             in = new ObjectInputStream(socket.getInputStream());
             connected = true;
 
-            System.out.println("已连接到服务器: " + SERVER_HOST + ":" + SERVER_PORT);
+            System.out.println("已连接到服务器: " + serverHost + ":" + serverPort);
             return true;
         } catch (IOException e) {
             System.err.println("连接服务器失败: " + e.getMessage());
             return false;
         }
+    }
+
+    /**
+     * 获取服务器地址
+     */
+    public String getServerHost() {
+        return serverHost;
+    }
+
+    /**
+     * 获取服务器端口
+     */
+    public int getServerPort() {
+        return serverPort;
     }
 
     /**

@@ -1,5 +1,6 @@
 package com._404.wms.network;
 
+import com._404.wms.config.ConfigManager;
 import com._404.wms.model.*;
 import com._404.wms.service.DataService;
 
@@ -17,7 +18,8 @@ import java.util.concurrent.Executors;
  * WMS服务器端 - 处理所有客户端连接和业务逻辑
  */
 public class WMSServer {
-    private static final int PORT = 8888;
+    private static final int DEFAULT_PORT = 8888;
+    private final int port;
     private ServerSocket serverSocket;
     private ExecutorService threadPool;
     private Map<String, ClientHandler> connectedClients;
@@ -29,6 +31,21 @@ public class WMSServer {
         this.connectedClients = new ConcurrentHashMap<>();
         this.dataService = new DataService();
         this.running = false;
+        // 从配置文件读取端口
+        this.port = ConfigManager.getInstance().getIntValue("Server", "Port", DEFAULT_PORT);
+    }
+
+    /**
+     * 使用指定端口创建服务器
+     * 
+     * @param port 服务器端口
+     */
+    public WMSServer(int port) {
+        this.threadPool = Executors.newCachedThreadPool();
+        this.connectedClients = new ConcurrentHashMap<>();
+        this.dataService = new DataService();
+        this.running = false;
+        this.port = port;
     }
 
     /**
@@ -36,9 +53,9 @@ public class WMSServer {
      */
     public void start() {
         try {
-            serverSocket = new ServerSocket(PORT);
+            serverSocket = new ServerSocket(port);
             running = true;
-            System.out.println("WMS服务器已启动，监听端口: " + PORT);
+            System.out.println("WMS服务器已启动，监听端口: " + port);
             System.out.println("等待客户端连接...");
 
             // 初始化示例数据
