@@ -79,11 +79,15 @@ public class WMSServer {
      * 初始化示例数据
      */
     private void initializeData() {
-        // 初始化用户
-        dataService.addUser(new User("U001", "admin", "admin123", "系统管理员", User.UserRole.WAREHOUSE_ADMIN));
-        dataService.addUser(new User("U002", "manager1", "123", "张经理", User.UserRole.DEPARTMENT_MANAGER));
-        dataService.addUser(new User("U003", "general", "123", "李总", User.UserRole.GENERAL_MANAGER));
-        dataService.addUser(new User("U004", "purchaser", "123", "王采购", User.UserRole.PURCHASER));
+        // // 初始化用户
+        // dataService.addUser(new User("U001", "admin", "admin123", "系统管理员",
+        // User.UserRole.WAREHOUSE_ADMIN));
+        // dataService.addUser(new User("U002", "manager1", "123", "张经理",
+        // User.UserRole.DEPARTMENT_MANAGER));
+        // dataService.addUser(new User("U003", "general", "123", "李总",
+        // User.UserRole.GENERAL_MANAGER));
+        // dataService.addUser(new User("U004", "purchaser", "123", "王采购",
+        // User.UserRole.PURCHASER));
 
         // 初始化商品
         Product p1 = new Product("P001", "联想笔记本电脑", "电子产品", 5500.0, 5, 50);

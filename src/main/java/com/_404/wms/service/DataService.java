@@ -24,6 +24,7 @@ public class DataService {
 
     private static final String DATA_DIR = "wms_data/";
     private MysqlMgr mysqlMgr;
+    private boolean dbEnabled;
 
     public DataService() {
         // 初始化内存数据结构
@@ -36,9 +37,11 @@ public class DataService {
         try {
             // 获取数据库管理器实例
             this.mysqlMgr = MysqlMgr.getInstance();
+            this.dbEnabled = this.mysqlMgr != null;
         } catch (Exception e) {
             System.err.println("Failed to initialize MysqlMgr: " + e.getMessage());
             e.printStackTrace();
+            this.dbEnabled = false;
         }
 
         // 创建本地数据存储目录
@@ -121,30 +124,48 @@ public class DataService {
      * 添加商品
      */
     public void addProduct(Product product) {
+        if (dbEnabled) {
+            mysqlMgr.addProduct(product);
+        }
         products.put(product.getProductId(), product);
-        saveData();
+        if (!dbEnabled) {
+            saveData();
+        }
     }
 
     /**
      * 更新商品
      */
     public void updateProduct(Product product) {
+        if (dbEnabled) {
+            mysqlMgr.updateProduct(product);
+        }
         products.put(product.getProductId(), product);
-        saveData();
+        if (!dbEnabled) {
+            saveData();
+        }
     }
 
     /**
      * 删除商品
      */
     public void deleteProduct(String productId) {
+        if (dbEnabled) {
+            mysqlMgr.deleteProduct(productId);
+        }
         products.remove(productId);
-        saveData();
+        if (!dbEnabled) {
+            saveData();
+        }
     }
 
     /**
      * 根据ID获取商品
      */
     public Product getProductById(String productId) {
+        if (dbEnabled) {
+            return mysqlMgr.getProductById(productId);
+        }
         return products.get(productId);
     }
 
@@ -152,6 +173,9 @@ public class DataService {
      * 获取所有商品
      */
     public List<Product> getAllProducts() {
+        if (dbEnabled) {
+            return mysqlMgr.getAllProducts();
+        }
         return new ArrayList<>(products.values());
     }
 
@@ -159,6 +183,11 @@ public class DataService {
      * 按类别查询商品
      */
     public List<Product> getProductsByCategory(String category) {
+        if (dbEnabled) {
+            return mysqlMgr.getAllProducts().stream()
+                    .filter(p -> p.getCategory() != null && p.getCategory().equals(category))
+                    .collect(Collectors.toList());
+        }
         return products.values().stream()
                 .filter(p -> p.getCategory().equals(category))
                 .collect(Collectors.toList());
@@ -168,6 +197,9 @@ public class DataService {
      * 查询需要补货的商品
      */
     public List<Product> getLowStockProducts() {
+        if (dbEnabled) {
+            return mysqlMgr.getLowStockProducts();
+        }
         return products.values().stream()
                 .filter(Product::needsStockAlert)
                 .collect(Collectors.toList());
@@ -179,22 +211,35 @@ public class DataService {
      * 添加采购订单
      */
     public void addPurchaseOrder(PurchaseOrder order) {
+        if (dbEnabled) {
+            mysqlMgr.addPurchaseOrder(order);
+        }
         purchaseOrders.put(order.getOrderId(), order);
-        saveData();
+        if (!dbEnabled) {
+            saveData();
+        }
     }
 
     /**
      * 更新采购订单
      */
     public void updatePurchaseOrder(PurchaseOrder order) {
+        if (dbEnabled) {
+            mysqlMgr.updatePurchaseOrder(order);
+        }
         purchaseOrders.put(order.getOrderId(), order);
-        saveData();
+        if (!dbEnabled) {
+            saveData();
+        }
     }
 
     /**
      * 根据ID获取采购订单
      */
     public PurchaseOrder getPurchaseOrderById(String orderId) {
+        if (dbEnabled) {
+            return mysqlMgr.getPurchaseOrderById(orderId);
+        }
         return purchaseOrders.get(orderId);
     }
 
@@ -202,6 +247,9 @@ public class DataService {
      * 获取所有采购订单
      */
     public List<PurchaseOrder> getAllPurchaseOrders() {
+        if (dbEnabled) {
+            return mysqlMgr.getAllPurchaseOrders();
+        }
         return new ArrayList<>(purchaseOrders.values());
     }
 
@@ -209,6 +257,9 @@ public class DataService {
      * 根据状态查询订单
      */
     public List<PurchaseOrder> getOrdersByStatus(PurchaseOrder.OrderStatus status) {
+        if (dbEnabled) {
+            return mysqlMgr.getOrdersByStatus(status);
+        }
         return purchaseOrders.values().stream()
                 .filter(o -> o.getStatus() == status)
                 .collect(Collectors.toList());
@@ -218,6 +269,9 @@ public class DataService {
      * 根据采购员查询订单
      */
     public List<PurchaseOrder> getOrdersByPurchaser(String purchaserId) {
+        if (dbEnabled) {
+            return mysqlMgr.getOrdersByPurchaser(purchaserId);
+        }
         return purchaseOrders.values().stream()
                 .filter(o -> o.getPurchaserId().equals(purchaserId))
                 .collect(Collectors.toList());
@@ -229,14 +283,22 @@ public class DataService {
      * 添加入库记录
      */
     public void addStockInRecord(StockInRecord record) {
+        if (dbEnabled) {
+            mysqlMgr.addStockInRecord(record);
+        }
         stockInRecords.add(record);
-        saveData();
+        if (!dbEnabled) {
+            saveData();
+        }
     }
 
     /**
      * 获取所有入库记录
      */
     public List<StockInRecord> getAllStockInRecords() {
+        if (dbEnabled) {
+            return mysqlMgr.getAllStockInRecords();
+        }
         return new ArrayList<>(stockInRecords);
     }
 
@@ -244,14 +306,22 @@ public class DataService {
      * 添加出库记录
      */
     public void addStockOutRecord(StockOutRecord record) {
+        if (dbEnabled) {
+            mysqlMgr.addStockOutRecord(record);
+        }
         stockOutRecords.add(record);
-        saveData();
+        if (!dbEnabled) {
+            saveData();
+        }
     }
 
     /**
      * 获取所有出库记录
      */
     public List<StockOutRecord> getAllStockOutRecords() {
+        if (dbEnabled) {
+            return mysqlMgr.getAllStockOutRecords();
+        }
         return new ArrayList<>(stockOutRecords);
     }
 
@@ -261,15 +331,25 @@ public class DataService {
      * 添加操作日志
      */
     public void addLog(OperationLog log) {
-        log.setLogId("LOG" + System.currentTimeMillis());
+        if (log.getLogId() == null || log.getLogId().isEmpty()) {
+            log.setLogId("LOG" + System.currentTimeMillis());
+        }
+        if (dbEnabled) {
+            mysqlMgr.addLog(log);
+        }
         logs.add(log);
-        saveLogsToFile();
+        if (!dbEnabled) {
+            saveLogsToFile();
+        }
     }
 
     /**
      * 获取所有日志
      */
     public List<OperationLog> getAllLogs() {
+        if (dbEnabled) {
+            return mysqlMgr.getAllLogs();
+        }
         return new ArrayList<>(logs);
     }
 
@@ -277,6 +357,9 @@ public class DataService {
      * 根据用户查询日志
      */
     public List<OperationLog> getLogsByUser(String userId) {
+        if (dbEnabled) {
+            return mysqlMgr.getLogsByUser(userId);
+        }
         return logs.stream()
                 .filter(l -> l.getUserId().equals(userId))
                 .collect(Collectors.toList());
@@ -288,6 +371,9 @@ public class DataService {
      * 保存所有数据
      */
     public void saveData() {
+        if (dbEnabled) {
+            return;
+        }
         try {
             // 保存用户 - 已迁移到MySQL，不再保存到文件
             // saveObject(users, DATA_DIR + "users.dat");
@@ -309,6 +395,9 @@ public class DataService {
      */
     @SuppressWarnings("unchecked")
     public void loadData() {
+        if (dbEnabled) {
+            return;
+        }
         try {
             // 加载用户 - 已迁移到MySQL，不再从文件加载
             /*

@@ -1086,31 +1086,18 @@ public class WarehouseAdminController implements Initializable {
 
         confirm.showAndWait().ifPresent(response -> {
             if (response == ButtonType.OK) {
-                // 禁用按钮防止重复点击
-                if (logoutButton != null) {
-                    logoutButton.setDisable(true);
-                }
+                logoutButton.setDisable(true);
 
-                // 在后台线程执行网络操作，避免阻塞 UI 线程
-                new Thread(() -> {
+                Thread logoutThread = new Thread(() -> {
                     try {
                         if (socketClient != null) {
                             socketClient.logout();
                             socketClient.disconnect();
                         }
-                    } catch (Exception e) {
-                        System.err.println("Logout error: " + e.getMessage());
                     } finally {
                         Platform.runLater(() -> {
-                            // 获取当前窗口并关闭
-                            if (logoutButton != null && logoutButton.getScene() != null) {
-                                Stage stage = (Stage) logoutButton.getScene().getWindow();
-                                if (stage != null) {
-                                    stage.close();
-                                }
-                            }
-
-                            // 重新打开登录界面
+                            Stage stage = (Stage) logoutButton.getScene().getWindow();
+                            stage.close();
                             try {
                                 new LoginApplication().start(new Stage());
                             } catch (Exception e) {
@@ -1118,7 +1105,10 @@ public class WarehouseAdminController implements Initializable {
                             }
                         });
                     }
-                }).start();
+                }, "Warehouse-Logout-Thread");
+
+                logoutThread.setDaemon(true);
+                logoutThread.start();
             }
         });
     }
