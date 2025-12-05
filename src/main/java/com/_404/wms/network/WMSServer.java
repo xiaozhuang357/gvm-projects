@@ -53,14 +53,18 @@ public class WMSServer {
      */
     public void start() {
         try {
+            System.out.println("创建ServerSocket，端口: " + port);
             serverSocket = new ServerSocket(port);
             running = true;
             System.out.println("WMS服务器已启动，监听端口: " + port);
             System.out.println("等待客户端连接...");
 
             // 初始化示例数据
+            System.out.println("开始初始化示例数据...");
             initializeData();
+            System.out.println("示例数据初始化完成");
 
+            System.out.println("进入主循环，等待客户端连接...");
             while (running) {
                 Socket clientSocket = serverSocket.accept();
                 System.out.println("新客户端连接: " + clientSocket.getInetAddress());
@@ -68,11 +72,13 @@ public class WMSServer {
                 ClientHandler handler = new ClientHandler(clientSocket);
                 threadPool.execute(handler);
             }
+            System.out.println("主循环退出");
         } catch (IOException e) {
-            if (running) {
-                System.err.println("服务器错误: " + e.getMessage());
-                e.printStackTrace();
-            }
+            System.err.println("服务器IO错误: " + e.getMessage());
+            e.printStackTrace();
+        } catch (Exception e) {
+            System.err.println("服务器未知错误: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 
@@ -99,7 +105,36 @@ public class WMSServer {
     private void initializeData() {
 
         // User.UserRole.PURCHASER));
+        if (dataService.getUserById("U001") == null) {
+            // 系统管理员 (对应 WAREHOUSE_ADMIN)
+            User u1 = new User("U001", "admin1", "admin123", "系统管理员", User.UserRole.WAREHOUSE_ADMIN);
+            // 默认 active 字段可能需要在 User 构造函数中设置为 true，或使用 setter 设置
+            u1.setActive(true);
+            dataService.addUser(u1);
+        }
 
+        if (dataService.getUserById("U002") == null) {
+            // 经理 (对应 DEPARTMENT_MAN)
+            User u2 = new User("U002", "manager1", "123", "张经理", User.UserRole.DEPARTMENT_MANAGER);
+            u2.setActive(true);
+            dataService.addUser(u2);
+        }
+
+        if (dataService.getUserById("U003") == null) {
+            // 总经理 (对应 GENERAL_MANAGER)
+            User u3 = new User("U003", "general", "123", "李总", User.UserRole.GENERAL_MANAGER);
+            u3.setActive(true);
+            dataService.addUser(u3);
+        }
+
+        if (dataService.getUserById("U004") == null) {
+            // 采购员 (对应 PURCHASER)
+            User u4 = new User("U004", "purchaser", "123", "王采购", User.UserRole.PURCHASER);
+            u4.setActive(true);
+            dataService.addUser(u4);
+        }
+
+        System.out.println("示例用户初始化完成");
         // 初始化商品 - 仅在不存在时插入
         if (dataService.getProductById("P001") == null) {
             Product p1 = new Product("P001", "联想笔记本电脑", "电子产品", 5500.0, 5, 50);
