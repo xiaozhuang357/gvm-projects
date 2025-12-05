@@ -1,6 +1,7 @@
 package com._404.wms.service;
 
 import com._404.wms.model.*;
+import com._404.wms.databases.mysql.MysqlMgr;
 
 import java.io.*;
 import java.util.*;
@@ -11,7 +12,7 @@ import java.util.stream.Collectors;
  * 数据服务类 - 管理所有业务数据
  */
 public class DataService {
-    private Map<String, User> users;
+    // private Map<String, User> users; // Removed in favor of MysqlMgr
     private Map<String, Product> products;
     private Map<String, PurchaseOrder> purchaseOrders;
     private List<StockInRecord> stockInRecords;
@@ -19,14 +20,22 @@ public class DataService {
     private List<OperationLog> logs;
 
     private static final String DATA_DIR = "wms_data/";
+    private MysqlMgr mysqlMgr;
 
     public DataService() {
-        this.users = new ConcurrentHashMap<>();
+        // this.users = new ConcurrentHashMap<>();
         this.products = new ConcurrentHashMap<>();
         this.purchaseOrders = new ConcurrentHashMap<>();
         this.stockInRecords = Collections.synchronizedList(new ArrayList<>());
         this.stockOutRecords = Collections.synchronizedList(new ArrayList<>());
         this.logs = Collections.synchronizedList(new ArrayList<>());
+
+        try {
+            this.mysqlMgr = MysqlMgr.getInstance();
+        } catch (Exception e) {
+            System.err.println("Failed to initialize MysqlMgr: " + e.getMessage());
+            e.printStackTrace();
+        }
 
         // 创建数据目录
         new File(DATA_DIR).mkdirs();
@@ -41,50 +50,65 @@ public class DataService {
      * 用户认证
      */
     public User authenticate(String username, String password) {
-        return users.values().stream()
-                .filter(u -> u.getUsername().equals(username) &&
-                        u.getPassword().equals(password) &&
-                        u.isActive())
-                .findFirst()
-                .orElse(null);
+        if (mysqlMgr != null) {
+            return mysqlMgr.authenticate(username, password);
+        }
+        return null;
     }
 
     /**
      * 添加用户
      */
     public void addUser(User user) {
-        users.put(user.getUserId(), user);
-        saveData();
+        if (mysqlMgr != null) {
+            mysqlMgr.addUser(user);
+        }
+        // users.put(user.getUserId(), user);
+        // saveData();
     }
 
     /**
      * 更新用户
      */
     public void updateUser(User user) {
-        users.put(user.getUserId(), user);
-        saveData();
+        if (mysqlMgr != null) {
+            mysqlMgr.updateUser(user);
+        }
+        // users.put(user.getUserId(), user);
+        // saveData();
     }
 
     /**
      * 删除用户
      */
     public void deleteUser(String userId) {
-        users.remove(userId);
-        saveData();
+        if (mysqlMgr != null) {
+            mysqlMgr.deleteUser(userId);
+        }
+        // users.remove(userId);
+        // saveData();
     }
 
     /**
      * 根据ID获取用户
      */
     public User getUserById(String userId) {
-        return users.get(userId);
+        if (mysqlMgr != null) {
+            return mysqlMgr.getUserById(userId);
+        }
+        return null;
+        // return users.get(userId);
     }
 
     /**
      * 获取所有用户
      */
     public List<User> getAllUsers() {
-        return new ArrayList<>(users.values());
+        if (mysqlMgr != null) {
+            return mysqlMgr.getAllUsers();
+        }
+        return new ArrayList<>();
+        // return new ArrayList<>(users.values());
     }
 
     // ==================== 商品管理 ====================
@@ -261,8 +285,8 @@ public class DataService {
      */
     public void saveData() {
         try {
-            // 保存用户
-            saveObject(users, DATA_DIR + "users.dat");
+            // 保存用户 - 已迁移到MySQL，不再保存到文件
+            // saveObject(users, DATA_DIR + "users.dat");
             // 保存商品
             saveObject(products, DATA_DIR + "products.dat");
             // 保存采购订单
@@ -282,11 +306,13 @@ public class DataService {
     @SuppressWarnings("unchecked")
     public void loadData() {
         try {
-            // 加载用户
-            Object usersObj = loadObject(DATA_DIR + "users.dat");
-            if (usersObj != null) {
-                users = (Map<String, User>) usersObj;
-            }
+            // 加载用户 - 已迁移到MySQL，不再从文件加载
+            /*
+             * Object usersObj = loadObject(DATA_DIR + "users.dat");
+             * if (usersObj != null) {
+             * users = (Map<String, User>) usersObj;
+             * }
+             */
 
             // 加载商品
             Object productsObj = loadObject(DATA_DIR + "products.dat");

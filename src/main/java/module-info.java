@@ -3,6 +3,8 @@ module com._404.wms {
 	requires javafx.fxml;
 	requires transitive javafx.graphics;
 	requires javafx.base;
+	requires java.sql;
+	requires com.google.gson;
 
 	opens com._404.wms to javafx.fxml;
 
