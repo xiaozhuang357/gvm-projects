@@ -153,28 +153,8 @@ public class LoginController {
 			});
 
 		} catch (IOException e) {
-			// 如果特定角色界面不存在，使用经理界面
 			System.err.println("加载界面失败: " + e.getMessage());
 			e.printStackTrace();
-
-			FXMLLoader fxmlLoader = new FXMLLoader(LoginController.class.getResource("manager.fxml"));
-			Scene scene = new Scene(fxmlLoader.load());
-
-			ManagerController controller = fxmlLoader.getController();
-			controller.setCurrentUser(user);
-
-			Stage stage = new Stage();
-			stage.setTitle(title);
-			stage.setScene(scene);
-			stage.setMaximized(true);
-			stage.show();
-
-			stage.setOnCloseRequest(event -> {
-				if (getSocketClient().isConnected()) {
-					getSocketClient().logout();
-					getSocketClient().disconnect();
-				}
-			});
 		}
 	}
 

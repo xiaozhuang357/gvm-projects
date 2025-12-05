@@ -10,22 +10,12 @@ import javafx.collections.ObservableList;
 import javafx.collections.transformation.FilteredList;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
-import javafx.fxml.FXMLLoader;
 import javafx.fxml.Initializable;
-import javafx.scene.Scene;
-import javafx.scene.chart.BarChart;
-import javafx.scene.chart.LineChart;
-import javafx.scene.chart.PieChart;
-import javafx.scene.chart.XYChart;
 import javafx.scene.control.*;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.text.Text;
-import javafx.stage.FileChooser;
 import javafx.stage.Stage;
-import java.io.File;
-import java.io.IOException;
 import java.net.URL;
-import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -33,7 +23,6 @@ import java.util.Map;
 import java.util.ResourceBundle;
 
 import javafx.beans.property.SimpleDoubleProperty;
-import javafx.beans.property.SimpleIntegerProperty;
 import javafx.beans.property.SimpleStringProperty;
 
 public class ManagerController implements Initializable {
@@ -56,74 +45,10 @@ public class ManagerController implements Initializable {
 	private Button rejectButton;
 
 	@FXML
-	private Button reportMenuButton;
-
-	@FXML
 	private Button approvalMenuButton;
 
 	@FXML
 	private Text userNameText;
-
-	// 报表管理相关控件
-	@FXML
-	private BorderPane reportManagementPane;
-
-	@FXML
-	private DatePicker startDatePicker;
-
-	@FXML
-	private DatePicker endDatePicker;
-
-	@FXML
-	private ComboBox<String> categoryComboBox;
-
-	@FXML
-	private ComboBox<String> chartTypeComboBox;
-
-	@FXML
-	private Text purchaseCostText;
-
-	@FXML
-	private Text inventoryValueText;
-
-	@FXML
-	private Text pendingOrdersText;
-
-	@FXML
-	private Text outboundQuantityText;
-
-	@FXML
-	private BarChart<String, Number> barChart;
-
-	@FXML
-	private LineChart<String, Number> lineChart;
-
-	@FXML
-	private PieChart pieChart;
-
-	@FXML
-	private TableView<ReportData> reportTableView;
-
-	@FXML
-	private TableColumn<ReportData, String> dateColumn;
-
-	@FXML
-	private TableColumn<ReportData, String> categoryColumn;
-
-	@FXML
-	private TableColumn<ReportData, String> productNameColumn;
-
-	@FXML
-	private TableColumn<ReportData, Integer> quantityColumn;
-
-	@FXML
-	private TableColumn<ReportData, Double> unitPriceColumn;
-
-	@FXML
-	private TableColumn<ReportData, Double> totalAmountColumn;
-
-	@FXML
-	private TableColumn<ReportData, String> statusColumn;
 
 	// 审批中心相关控件
 	@FXML
@@ -248,15 +173,6 @@ public class ManagerController implements Initializable {
 
 	@Override
 	public void initialize(URL location, ResourceBundle resources) {
-		// 初始化图表类型下拉框
-		chartTypeComboBox.setItems(FXCollections.observableArrayList("柱状图", "折线图", "饼图"));
-		chartTypeComboBox.setValue("柱状图");
-
-		// 初始化商品类别下拉框
-		categoryComboBox.setItems(FXCollections.observableArrayList(
-				"全部类别", "电子产品", "食品饮料", "日用品", "办公用品", "服装鞋帽"));
-		categoryComboBox.setValue("全部类别");
-
 		// 初始化审批状态和类型下拉框
 		approvalStatusComboBox.setItems(FXCollections.observableArrayList(
 				"全部状态", "待审批", "已通过", "已退回"));
@@ -265,16 +181,6 @@ public class ManagerController implements Initializable {
 		approvalTypeComboBox.setItems(FXCollections.observableArrayList(
 				"全部类型", "采购申请", "出库申请", "入库申请", "调拨申请"));
 		approvalTypeComboBox.setValue("全部类型");
-
-		// 设置默认日期范围（最近30天）
-		endDatePicker.setValue(LocalDate.now());
-		startDatePicker.setValue(LocalDate.now().minusDays(30));
-
-		// 初始化图表数据
-		initializeChartData();
-
-		// 初始化报表数据
-		initializeReportTableData();
 
 		// 初始化审批任务数据
 		initializeApprovalTableData();
@@ -293,71 +199,8 @@ public class ManagerController implements Initializable {
 			}
 		});
 
-		// 默认显示报表管理界面
-		showReportManagement(null);
-	}
-
-	/**
-	 * 初始化图表数据
-	 */
-	private void initializeChartData() {
-		// 柱状图数据
-		XYChart.Series<String, Number> series1 = new XYChart.Series<>();
-		series1.setName("采购成本");
-		series1.getData().add(new XYChart.Data<>("1月", 95000));
-		series1.getData().add(new XYChart.Data<>("2月", 105000));
-		series1.getData().add(new XYChart.Data<>("3月", 118500));
-		series1.getData().add(new XYChart.Data<>("4月", 128500));
-		barChart.getData().add(series1);
-
-		// 折线图数据
-		XYChart.Series<String, Number> series2 = new XYChart.Series<>();
-		series2.setName("库存价值");
-		series2.getData().add(new XYChart.Data<>("第1周", 420000));
-		series2.getData().add(new XYChart.Data<>("第2周", 435000));
-		series2.getData().add(new XYChart.Data<>("第3周", 448000));
-		series2.getData().add(new XYChart.Data<>("第4周", 456800));
-		lineChart.getData().add(series2);
-
-		// 饼图数据
-		ObservableList<PieChart.Data> pieChartData = FXCollections.observableArrayList(
-				new PieChart.Data("电子产品", 35),
-				new PieChart.Data("食品饮料", 25),
-				new PieChart.Data("日用品", 20),
-				new PieChart.Data("办公用品", 12),
-				new PieChart.Data("服装鞋帽", 8));
-		pieChart.setData(pieChartData);
-	}
-
-	/**
-	 * 初始化报表表格数据
-	 */
-	private void initializeReportTableData() {
-		dateColumn.setCellValueFactory(
-				cellData -> new SimpleStringProperty(cellData.getValue().getDate()));
-		categoryColumn.setCellValueFactory(
-				cellData -> new SimpleStringProperty(cellData.getValue().getCategory()));
-		productNameColumn.setCellValueFactory(
-				cellData -> new SimpleStringProperty(cellData.getValue().getProductName()));
-		quantityColumn.setCellValueFactory(
-				cellData -> new SimpleIntegerProperty(cellData.getValue().getQuantity())
-						.asObject());
-		unitPriceColumn.setCellValueFactory(
-				cellData -> new SimpleDoubleProperty(cellData.getValue().getUnitPrice())
-						.asObject());
-		totalAmountColumn.setCellValueFactory(
-				cellData -> new SimpleDoubleProperty(cellData.getValue().getTotalAmount())
-						.asObject());
-		statusColumn.setCellValueFactory(
-				cellData -> new SimpleStringProperty(cellData.getValue().getStatus()));
-
-		// 添加示例数据
-		ObservableList<ReportData> data = FXCollections.observableArrayList(
-				new ReportData("2024-04-01", "电子产品", "笔记本电脑", 10, 5500.0, 55000.0, "已入库"),
-				new ReportData("2024-04-02", "办公用品", "打印纸", 100, 25.0, 2500.0, "已入库"),
-				new ReportData("2024-04-03", "食品饮料", "矿泉水", 200, 2.5, 500.0, "已入库"),
-				new ReportData("2024-04-04", "日用品", "洗手液", 50, 15.0, 750.0, "待入库"));
-		reportTableView.setItems(data);
+		// 默认显示审批中心界面
+		showApprovalCenter(null);
 	}
 
 	/**
@@ -459,45 +302,6 @@ public class ManagerController implements Initializable {
 	}
 
 	/**
-	 * 导出报表
-	 */
-	@FXML
-	void exportReport(ActionEvent event) {
-		FileChooser fileChooser = new FileChooser();
-		fileChooser.setTitle("导出报表");
-		fileChooser.getExtensionFilters().addAll(
-				new FileChooser.ExtensionFilter("CSV文件", "*.csv"),
-				new FileChooser.ExtensionFilter("所有文件", "*.*"));
-		fileChooser.setInitialFileName("审批报表_" + LocalDate.now() + ".csv");
-
-		File file = fileChooser.showSaveDialog(approvalTableView.getScene().getWindow());
-		if (file != null) {
-			try (java.io.PrintWriter writer = new java.io.PrintWriter(file, "UTF-8")) {
-				// CSV头
-				writer.println("订单号,类型,申请人,标题,金额,申请日期,优先级,状态");
-
-				// 数据行
-				for (ApprovalTask task : approvalTableView.getItems()) {
-					writer.printf("%s,%s,%s,%s,%.2f,%s,%s,%s%n",
-							task.getId(),
-							task.getType(),
-							task.getApplicant(),
-							task.getTitle(),
-							task.getAmount(),
-							task.getApplyDate(),
-							task.getPriority(),
-							task.getStatus());
-				}
-
-				showAlert("成功", "报表已导出至: " + file.getAbsolutePath(), Alert.AlertType.INFORMATION);
-			} catch (Exception e) {
-				showAlert("错误", "导出失败: " + e.getMessage(), Alert.AlertType.ERROR);
-				e.printStackTrace();
-			}
-		}
-	}
-
-	/**
 	 * 退出登录
 	 */
 	@FXML
@@ -542,53 +346,14 @@ public class ManagerController implements Initializable {
 	}
 
 	/**
-	 * 显示报表管理界面
-	 */
-	@FXML
-	void showReportManagement(ActionEvent event) {
-		reportManagementPane.setVisible(true);
-		approvalCenterPane.setVisible(false);
-
-		// 更新菜单按钮样式
-		reportMenuButton.setStyle("-fx-background-color: #3498DB; -fx-border-width: 0;");
-		approvalMenuButton.setStyle("-fx-background-color: #34495E; -fx-border-width: 0;");
-	}
-
-	/**
 	 * 显示审批中心界面
 	 */
 	@FXML
 	void showApprovalCenter(ActionEvent event) {
-		reportManagementPane.setVisible(false);
 		approvalCenterPane.setVisible(true);
 
 		// 更新菜单按钮样式
-		reportMenuButton.setStyle("-fx-background-color: #34495E; -fx-border-width: 0;");
 		approvalMenuButton.setStyle("-fx-background-color: #3498DB; -fx-border-width: 0;");
-	}
-
-	/**
-	 * 切换图表类型
-	 */
-	@FXML
-	void switchChartType(ActionEvent event) {
-		String selectedType = chartTypeComboBox.getValue();
-
-		barChart.setVisible(false);
-		lineChart.setVisible(false);
-		pieChart.setVisible(false);
-
-		switch (selectedType) {
-			case "柱状图":
-				barChart.setVisible(true);
-				break;
-			case "折线图":
-				lineChart.setVisible(true);
-				break;
-			case "饼图":
-				pieChart.setVisible(true);
-				break;
-		}
 	}
 
 	@FXML
@@ -681,7 +446,6 @@ public class ManagerController implements Initializable {
 				.filter(task -> "待审批".equals(task.getStatus()))
 				.count();
 		pendingCountText.setText(String.valueOf(count));
-		pendingOrdersText.setText(String.valueOf(count));
 	}
 
 	/**
@@ -693,56 +457,6 @@ public class ManagerController implements Initializable {
 		alert.setHeaderText(null);
 		alert.setContentText(content);
 		alert.showAndWait();
-	}
-
-	// 内部类：报表数据模型
-	public static class ReportData {
-		private String date;
-		private String category;
-		private String productName;
-		private int quantity;
-		private double unitPrice;
-		private double totalAmount;
-		private String status;
-
-		public ReportData(String date, String category, String productName,
-				int quantity, double unitPrice, double totalAmount, String status) {
-			this.date = date;
-			this.category = category;
-			this.productName = productName;
-			this.quantity = quantity;
-			this.unitPrice = unitPrice;
-			this.totalAmount = totalAmount;
-			this.status = status;
-		}
-
-		public String getDate() {
-			return date;
-		}
-
-		public String getCategory() {
-			return category;
-		}
-
-		public String getProductName() {
-			return productName;
-		}
-
-		public int getQuantity() {
-			return quantity;
-		}
-
-		public double getUnitPrice() {
-			return unitPrice;
-		}
-
-		public double getTotalAmount() {
-			return totalAmount;
-		}
-
-		public String getStatus() {
-			return status;
-		}
 	}
 
 	// 内部类：审批任务数据模型

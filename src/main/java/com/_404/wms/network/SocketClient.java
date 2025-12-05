@@ -30,6 +30,7 @@ public class SocketClient {
     public boolean connect() {
         try {
             socket = new Socket(SERVER_HOST, SERVER_PORT);
+            socket.setSoTimeout(10000); // 设置10秒超时，避免无限阻塞
             out = new ObjectOutputStream(socket.getOutputStream());
             out.flush(); // 立即刷新，发送流头部信息
             in = new ObjectInputStream(socket.getInputStream());
@@ -44,7 +45,7 @@ public class SocketClient {
     }
 
     /**
-     * 断开连接
+     * 断开连接（会发送LOGOUT消息）
      */
     public void disconnect() {
         connected = false;
@@ -52,15 +53,35 @@ public class SocketClient {
             if (currentUser != null) {
                 sendAndReceive(new Message(Message.MessageType.LOGOUT));
             }
-            if (in != null)
+            closeConnection();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * 仅关闭连接（不发送任何消息）
+     * 用于已经发送过LOGOUT消息后的清理工作
+     */
+    public void closeConnection() {
+        connected = false;
+        currentUser = null;
+        try {
+            if (in != null) {
                 in.close();
-            if (out != null)
+                in = null;
+            }
+            if (out != null) {
                 out.close();
-            if (socket != null)
+                out = null;
+            }
+            if (socket != null) {
                 socket.close();
+                socket = null;
+            }
             System.out.println("已断开与服务器的连接");
         } catch (IOException e) {
-            e.printStackTrace();
+            System.err.println("关闭连接时出错: " + e.getMessage());
         }
     }
 

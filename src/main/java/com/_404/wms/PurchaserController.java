@@ -35,6 +35,10 @@ public class PurchaserController implements Initializable {
     private ObservableList<OrderItem> currentOrderItems = FXCollections.observableArrayList();
     // 已提示的低库存商品集合（避免重复弹窗）
     private Set<String> alertedLowStockIds = new HashSet<>();
+    // 控制后台轮询线程的标志位
+    private volatile boolean keepRunning = true;
+    // 后台轮询线程引用
+    private Thread refreshThread;
 
     // 顶部栏
     @FXML
@@ -151,16 +155,87 @@ public class PurchaserController implements Initializable {
         loadDataFromServer();
 
         // 后台轮询以获取服务器端最新订单/商品状态，减小需重新登录才能看到更新的情况
-        new Thread(() -> {
-            while (LoginController.getSocketClient().isConnected()) {
+        refreshThread = new Thread(() -> {
+            int consecutiveFailures = 0;
+            while (keepRunning && LoginController.getSocketClient().isConnected()) {
                 try {
                     Thread.sleep(5000);
+
+                    // 检查标志位和连接状态
+                    if (!keepRunning || !socketClient.isConnected()) {
+                        System.out.println("连接已断开或用户退出，停止数据轮询");
+                        break;
+                    }
+
                     loadDataFromServer();
+                    consecutiveFailures = 0; // 成功后重置计数器
                 } catch (InterruptedException e) {
+                    System.out.println("轮询线程被中断");
                     break;
+                } catch (Exception e) {
+                    consecutiveFailures++;
+                    System.err.println("数据加载失败 (第" + consecutiveFailures + "次): " + e.getMessage());
+
+                    // 连续失败3次后停止轮询
+                    if (consecutiveFailures >= 3) {
+                        System.err.println("连续失败3次，停止数据轮询");
+                        Platform.runLater(() -> {
+                            Alert alert = new Alert(Alert.AlertType.ERROR);
+                            alert.setTitle("连接错误");
+                            alert.setHeaderText("与服务器的连接已丢失");
+                            alert.setContentText("请重新登录以恢复连接");
+                            alert.showAndWait();
+                        });
+                        break;
+                    }
                 }
             }
-        }, "Purchaser-Refresh-Thread").start();
+            System.out.println("轮询线程已退出");
+        }, "Purchaser-Refresh-Thread");
+        refreshThread.setDaemon(true);
+        refreshThread.start();
+
+        // 添加窗口关闭事件监听器，确保直接关闭窗口时也能停止后台线程
+        Platform.runLater(() -> {
+            if (logoutButton != null && logoutButton.getScene() != null) {
+                Stage stage = (Stage) logoutButton.getScene().getWindow();
+                if (stage != null) {
+                    stage.setOnCloseRequest(event -> {
+                        System.out.println("窗口正在关闭，停止后台线程...");
+                        keepRunning = false;
+
+                        // 中断轮询线程，不等待sleep完成
+                        if (refreshThread != null && refreshThread.isAlive()) {
+                            refreshThread.interrupt();
+                            System.out.println("已中断轮询线程");
+                        }
+
+                        // 在新线程中关闭连接，避免阻塞UI线程
+                        Thread cleanupThread = new Thread(() -> {
+                            // 等待后台轮询线程结束（最多等待2秒）
+                            if (refreshThread != null && refreshThread.isAlive()) {
+                                try {
+                                    refreshThread.join(2000);
+                                } catch (InterruptedException ignored) {
+                                }
+                            }
+
+                            if (socketClient != null && socketClient.isConnected()) {
+                                try {
+                                    socketClient.logout();
+                                } catch (Exception e) {
+                                    System.err.println("发送登出消息失败: " + e.getMessage());
+                                }
+                                socketClient.closeConnection();
+                                System.out.println("已断开Socket连接");
+                            }
+                        }, "Window-Close-Cleanup");
+                        cleanupThread.setDaemon(true);
+                        cleanupThread.start();
+                    });
+                }
+            }
+        });
     }
 
     /**
@@ -168,35 +243,60 @@ public class PurchaserController implements Initializable {
      */
     private void loadDataFromServer() {
         new Thread(() -> {
-            // 加载产品列表
-            Message response = socketClient.sendAndReceive(new Message(Message.MessageType.PRODUCT_LIST));
-            if (response.isSuccess()) {
-                @SuppressWarnings("unchecked")
-                List<Product> products = (List<Product>) response.getData();
-                Platform.runLater(() -> {
-                    productList.clear();
-                    productList.addAll(products);
-                    // 检查库存预警（仅对未提示过的商品弹窗）
-                    checkLowStock();
-                });
-            }
+            try {
+                // 先检查连接状态
+                if (!socketClient.isConnected()) {
+                    System.err.println("未连接到服务器，跳过数据加载");
+                    return;
+                }
 
-            // 加载我的订单
-            Message orderResponse = socketClient.getPurchaseOrders();
-            if (orderResponse.isSuccess()) {
-                @SuppressWarnings("unchecked")
-                List<PurchaseOrder> orders = (List<PurchaseOrder>) orderResponse.getData();
-                Platform.runLater(() -> {
-                    // 只显示当前用户创建的订单
-                    orderList.clear();
-                    for (PurchaseOrder order : orders) {
-                        if (order.getPurchaserId().equals(currentUser.getUserId())) {
-                            orderList.add(order);
-                        }
+                // 加载产品列表
+                Message response = socketClient.sendAndReceive(new Message(Message.MessageType.PRODUCT_LIST));
+                if (response != null && response.isSuccess()) {
+                    @SuppressWarnings("unchecked")
+                    List<Product> products = (List<Product>) response.getData();
+                    if (products != null) {
+                        Platform.runLater(() -> {
+                            productList.clear();
+                            productList.addAll(products);
+                            // 检查库存预警（仅对未提示过的商品弹窗）
+                            checkLowStock();
+                        });
                     }
-                });
+                } else {
+                    String errorMsg = response != null ? response.getMessage() : "null response";
+                    System.err.println("Failed to load products: " + errorMsg);
+                    throw new RuntimeException("加载产品失败: " + errorMsg);
+                }
+
+                // 加载我的订单
+                Message orderResponse = socketClient.getPurchaseOrders();
+                if (orderResponse != null && orderResponse.isSuccess()) {
+                    @SuppressWarnings("unchecked")
+                    List<PurchaseOrder> orders = (List<PurchaseOrder>) orderResponse.getData();
+                    if (orders != null && currentUser != null) {
+                        Platform.runLater(() -> {
+                            // 只显示当前用户创建的订单
+                            orderList.clear();
+                            for (PurchaseOrder order : orders) {
+                                if (order.getPurchaserId() != null
+                                        && order.getPurchaserId().equals(currentUser.getUserId())) {
+                                    orderList.add(order);
+                                }
+                            }
+                        });
+                    }
+                } else {
+                    String errorMsg = orderResponse != null ? orderResponse.getMessage() : "null response";
+                    System.err.println("Failed to load orders: " + errorMsg);
+                    throw new RuntimeException("加载订单失败: " + errorMsg);
+                }
+            } catch (Exception e) {
+                System.err.println("Error loading data from server: " + e.getMessage());
+                e.printStackTrace();
+                throw new RuntimeException(e);
             }
-        }).start();
+        }, "Purchaser-Load-Data").start();
     }
 
     /**
@@ -516,23 +616,37 @@ public class PurchaserController implements Initializable {
 
         // 提交到服务器
         new Thread(() -> {
-            Message msg = socketClient.sendAndReceive(
-                    new Message(Message.MessageType.PURCHASE_ORDER_ADD, order));
+            try {
+                Message msg = socketClient.sendAndReceive(
+                        new Message(Message.MessageType.PURCHASE_ORDER_ADD, order));
 
-            Platform.runLater(() -> {
-                if (msg.isSuccess()) {
-                    showAlert("成功", "采购订单提交成功！\n订单编号: " + order.getOrderId(), Alert.AlertType.INFORMATION);
-                    handleClearOrder(null);
-                    // 将本次订单中的商品标记为已提醒，避免立即重复弹窗
-                    for (OrderItem it : currentOrderItems) {
-                        alertedLowStockIds.add(it.getProductId());
+                Platform.runLater(() -> {
+                    if (msg != null && msg.isSuccess()) {
+                        // 在清空订单前先保存订单项的产品ID
+                        List<String> productIds = new ArrayList<>();
+                        for (OrderItem it : currentOrderItems) {
+                            productIds.add(it.getProductId());
+                        }
+
+                        showAlert("成功", "采购订单提交成功！\n订单编号: " + order.getOrderId(), Alert.AlertType.INFORMATION);
+                        handleClearOrder(null);
+
+                        // 将本次订单中的商品标记为已提醒，避免立即重复弹窗
+                        for (String productId : productIds) {
+                            alertedLowStockIds.add(productId);
+                        }
+                        loadDataFromServer();
+                    } else {
+                        String errorMsg = (msg != null) ? msg.getMessage() : "服务器无响应";
+                        showAlert("失败", errorMsg, Alert.AlertType.ERROR);
                     }
-                    loadDataFromServer();
-                } else {
-                    showAlert("失败", msg.getMessage(), Alert.AlertType.ERROR);
-                }
-            });
-        }).start();
+                });
+            } catch (Exception e) {
+                Platform.runLater(() -> {
+                    showAlert("失败", "提交订单时发生错误: " + e.getMessage(), Alert.AlertType.ERROR);
+                });
+            }
+        }, "Submit-Order-Thread").start();
     }
 
     @FXML
@@ -688,35 +802,70 @@ public class PurchaserController implements Initializable {
 
         confirm.showAndWait().ifPresent(response -> {
             if (response == ButtonType.OK) {
+                // 禁用按钮防止重复点击
                 if (logoutButton != null) {
                     logoutButton.setDisable(true);
                 }
 
-                new Thread(() -> {
+                // 停止后台轮询线程
+                keepRunning = false;
+
+                // 中断轮询线程
+                if (refreshThread != null && refreshThread.isAlive()) {
+                    refreshThread.interrupt();
+                    System.out.println("已中断轮询线程");
+                }
+
+                // 先获取当前窗口的引用
+                final Stage currentStage = (logoutButton != null && logoutButton.getScene() != null)
+                        ? (Stage) logoutButton.getScene().getWindow()
+                        : null;
+
+                Thread logoutThread = new Thread(() -> {
                     try {
-                        if (socketClient != null) {
-                            socketClient.logout();
-                            socketClient.disconnect();
+                        // 等待后台轮询线程结束（最多等待3秒）
+                        if (refreshThread != null && refreshThread.isAlive()) {
+                            System.out.println("等待轮询线程结束...");
+                            refreshThread.join(3000);
+                        }
+
+                        if (socketClient != null && socketClient.isConnected()) {
+                            try {
+                                socketClient.logout();
+                            } catch (Exception e) {
+                                System.err.println("发送登出消息失败: " + e.getMessage());
+                            }
+                            socketClient.closeConnection();
                         }
                     } catch (Exception e) {
                         System.err.println("Logout error: " + e.getMessage());
+                        e.printStackTrace();
                     } finally {
                         Platform.runLater(() -> {
-                            if (logoutButton != null && logoutButton.getScene() != null) {
-                                Stage stage = (Stage) logoutButton.getScene().getWindow();
-                                if (stage != null) {
-                                    stage.close();
-                                }
-                            }
-
                             try {
-                                new LoginApplication().start(new Stage());
+                                // 使用FXMLLoader加载登录界面
+                                javafx.fxml.FXMLLoader fxmlLoader = new javafx.fxml.FXMLLoader(
+                                        LoginApplication.class.getResource("login.fxml"));
+                                javafx.scene.Scene scene = new javafx.scene.Scene(fxmlLoader.load());
+
+                                Stage loginStage = new Stage();
+                                loginStage.setTitle("仓库管理系统 - 登录");
+                                loginStage.setScene(scene);
+                                loginStage.show();
+
+                                // 关闭当前窗口
+                                if (currentStage != null) {
+                                    currentStage.close();
+                                }
                             } catch (Exception e) {
+                                System.err.println("Failed to return to login: " + e.getMessage());
                                 e.printStackTrace();
                             }
                         });
                     }
-                }).start();
+                }, "Purchaser-Logout-Thread");
+                logoutThread.setDaemon(false);
+                logoutThread.start();
             }
         });
     }

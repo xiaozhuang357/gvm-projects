@@ -585,19 +585,37 @@ public class WarehouseAdminController implements Initializable {
         // 添加输入验证
         Button saveButton = (Button) dialog.getDialogPane().lookupButton(saveButtonType);
         saveButton.addEventFilter(ActionEvent.ACTION, event -> {
-            if (nameField.getText().trim().isEmpty() ||
-                    categoryField.getText().trim().isEmpty() ||
-                    unitField.getText().trim().isEmpty()) {
+            String name = nameField.getText();
+            String category = categoryField.getText();
+            String unit = unitField.getText();
+
+            if (name == null || name.trim().isEmpty() ||
+                    category == null || category.trim().isEmpty() ||
+                    unit == null || unit.trim().isEmpty()) {
                 showAlert("错误", "商品名称、类别和单位不能为空", Alert.AlertType.ERROR);
                 event.consume(); // 阻止对话框关闭
                 return;
             }
 
             try {
-                Double.parseDouble(priceField.getText().trim());
-                Double.parseDouble(sellingPriceField.getText().trim());
-                Integer.parseInt(minStockField.getText().trim());
-                Integer.parseInt(maxStockField.getText().trim());
+                String priceText = priceField.getText();
+                String sellingPriceText = sellingPriceField.getText();
+                String minStockText = minStockField.getText();
+                String maxStockText = maxStockField.getText();
+
+                if (priceText == null || priceText.trim().isEmpty() ||
+                        sellingPriceText == null || sellingPriceText.trim().isEmpty() ||
+                        minStockText == null || minStockText.trim().isEmpty() ||
+                        maxStockText == null || maxStockText.trim().isEmpty()) {
+                    showAlert("错误", "价格和库存字段不能为空", Alert.AlertType.ERROR);
+                    event.consume();
+                    return;
+                }
+
+                Double.parseDouble(priceText.trim());
+                Double.parseDouble(sellingPriceText.trim());
+                Integer.parseInt(minStockText.trim());
+                Integer.parseInt(maxStockText.trim());
             } catch (NumberFormatException e) {
                 showAlert("错误", "请输入有效的数字", Alert.AlertType.ERROR);
                 event.consume(); // 阻止对话框关闭
@@ -612,16 +630,16 @@ public class WarehouseAdminController implements Initializable {
                         p.setProductId("P" + System.currentTimeMillis());
                         p.setCurrentStock(0);
                     }
-                    p.setProductName(nameField.getText().trim());
-                    p.setCategory(categoryField.getText().trim());
-                    p.setSpecification(specField.getText().trim());
-                    p.setUnit(unitField.getText().trim());
-                    p.setPurchasePrice(Double.parseDouble(priceField.getText().trim()));
-                    p.setSellingPrice(Double.parseDouble(sellingPriceField.getText().trim()));
-                    p.setMinStock(Integer.parseInt(minStockField.getText().trim()));
-                    p.setMaxStock(Integer.parseInt(maxStockField.getText().trim()));
-                    p.setSupplier(supplierField.getText().trim());
-                    p.setDescription(descArea.getText().trim());
+                    p.setProductName(getTextSafe(nameField));
+                    p.setCategory(getTextSafe(categoryField));
+                    p.setSpecification(getTextSafe(specField));
+                    p.setUnit(getTextSafe(unitField));
+                    p.setPurchasePrice(Double.parseDouble(getTextSafe(priceField)));
+                    p.setSellingPrice(Double.parseDouble(getTextSafe(sellingPriceField)));
+                    p.setMinStock(Integer.parseInt(getTextSafe(minStockField)));
+                    p.setMaxStock(Integer.parseInt(getTextSafe(maxStockField)));
+                    p.setSupplier(getTextSafe(supplierField));
+                    p.setDescription(descArea.getText() != null ? descArea.getText().trim() : "");
                     return p;
                 } catch (NumberFormatException e) {
                     showAlert("错误", "请输入有效的数字", Alert.AlertType.ERROR);
@@ -1458,5 +1476,13 @@ public class WarehouseAdminController implements Initializable {
                 }
             }
         });
+    }
+
+    /**
+     * 安全获取TextField的文本值，避免NullPointerException
+     */
+    private String getTextSafe(TextField field) {
+        String text = field.getText();
+        return text != null ? text.trim() : "";
     }
 }

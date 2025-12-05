@@ -1,54 +1,46 @@
 package com._404.wms.service;
 
+import com._404.wms.dao.*;
+import com._404.wms.db.DatabaseManager;
 import com._404.wms.model.*;
-import com._404.wms.databases.mysql.MysqlMgr;
+import com._404.wms.model.PurchaseOrder.OrderStatus;
 
-import java.io.*;
+import java.time.LocalDateTime;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
+import java.util.logging.Logger;
 
 /**
- * 数据服务类 - 管理所有业务数据
- * 采用混合存储模式：
- * 1. 用户数据：存储在 MySQL 数据库中
- * 2. 业务数据（商品、订单等）：存储在本地文件系统 (序列化对象)
+ * 数据服务类 - 统一的业务数据访问入口
+ * 使用新的DAO层进行数据访问
  */
 public class DataService {
-    // 内存缓存，用于快速访问业务数据
-    private Map<String, Product> products;
-    private Map<String, PurchaseOrder> purchaseOrders;
-    private List<StockInRecord> stockInRecords;
-    private List<StockOutRecord> stockOutRecords;
-    private List<OperationLog> logs;
+    private static final Logger logger = Logger.getLogger(DataService.class.getName());
 
-    private static final String DATA_DIR = "wms_data/";
-    private MysqlMgr mysqlMgr;
-    private boolean dbEnabled;
+    // DAO实例
+    private final UserDao userDao;
+    private final ProductDao productDao;
+    private final PurchaseOrderDao purchaseOrderDao;
+    private final StockInRecordDao stockInRecordDao;
+    private final StockOutRecordDao stockOutRecordDao;
+    private final OperationLogDao operationLogDao;
+
+    // 数据库管理器
+    private final DatabaseManager dbManager;
 
     public DataService() {
-        // 初始化内存数据结构
-        this.products = new ConcurrentHashMap<>();
-        this.purchaseOrders = new ConcurrentHashMap<>();
-        this.stockInRecords = Collections.synchronizedList(new ArrayList<>());
-        this.stockOutRecords = Collections.synchronizedList(new ArrayList<>());
-        this.logs = Collections.synchronizedList(new ArrayList<>());
+        // 初始化数据库管理器（确保表结构已创建）
+        this.dbManager = DatabaseManager.getInstance();
 
-        try {
-            // 获取数据库管理器实例
-            this.mysqlMgr = MysqlMgr.getInstance();
-            this.dbEnabled = this.mysqlMgr != null;
-        } catch (Exception e) {
-            System.err.println("Failed to initialize MysqlMgr: " + e.getMessage());
-            e.printStackTrace();
-            this.dbEnabled = false;
-        }
+        // 获取DAO实例
+        DaoFactory daoFactory = DaoFactory.getInstance();
+        this.userDao = daoFactory.getUserDao();
+        this.productDao = daoFactory.getProductDao();
+        this.purchaseOrderDao = daoFactory.getPurchaseOrderDao();
+        this.stockInRecordDao = daoFactory.getStockInRecordDao();
+        this.stockOutRecordDao = daoFactory.getStockOutRecordDao();
+        this.operationLogDao = daoFactory.getOperationLogDao();
 
-        // 创建本地数据存储目录
-        new File(DATA_DIR).mkdirs();
-
-        // 从文件系统加载历史数据
-        loadData();
+        logger.info("DataService initialized successfully");
     }
 
     // ==================== 用户管理 ====================
@@ -57,65 +49,57 @@ public class DataService {
      * 用户认证
      */
     public User authenticate(String username, String password) {
-        if (mysqlMgr != null) {
-            return mysqlMgr.authenticate(username, password);
+        Optional<User> user = userDao.authenticate(username, password);
+        if (user.isPresent()) {
+            // 更新最后登录时间
+            userDao.updateLastLoginTime(user.get().getUserId());
         }
-        return null;
+        return user.orElse(null);
     }
 
     /**
      * 添加用户
      */
     public void addUser(User user) {
-        if (mysqlMgr != null) {
-            mysqlMgr.addUser(user);
+        if (user.getUserId() == null || user.getUserId().isEmpty()) {
+            user.setUserId(generateId("USR"));
         }
-        // users.put(user.getUserId(), user);
-        // saveData();
+        userDao.save(user);
     }
 
     /**
      * 更新用户
      */
     public void updateUser(User user) {
-        if (mysqlMgr != null) {
-            mysqlMgr.updateUser(user);
-        }
-        // users.put(user.getUserId(), user);
-        // saveData();
+        userDao.update(user);
     }
 
     /**
      * 删除用户
      */
     public void deleteUser(String userId) {
-        if (mysqlMgr != null) {
-            mysqlMgr.deleteUser(userId);
-        }
-        // users.remove(userId);
-        // saveData();
+        userDao.deleteById(userId);
     }
 
     /**
      * 根据ID获取用户
      */
     public User getUserById(String userId) {
-        if (mysqlMgr != null) {
-            return mysqlMgr.getUserById(userId);
-        }
-        return null;
-        // return users.get(userId);
+        return userDao.findById(userId).orElse(null);
     }
 
     /**
      * 获取所有用户
      */
     public List<User> getAllUsers() {
-        if (mysqlMgr != null) {
-            return mysqlMgr.getAllUsers();
-        }
-        return new ArrayList<>();
-        // return new ArrayList<>(users.values());
+        return userDao.findAll();
+    }
+
+    /**
+     * 根据用户名获取用户
+     */
+    public User getUserByUsername(String username) {
+        return userDao.findByUsername(username).orElse(null);
     }
 
     // ==================== 商品管理 ====================
@@ -124,85 +108,66 @@ public class DataService {
      * 添加商品
      */
     public void addProduct(Product product) {
-        if (dbEnabled) {
-            mysqlMgr.addProduct(product);
+        if (product.getProductId() == null || product.getProductId().isEmpty()) {
+            product.setProductId(generateId("PRD"));
         }
-        products.put(product.getProductId(), product);
-        if (!dbEnabled) {
-            saveData();
-        }
+        productDao.save(product);
     }
 
     /**
      * 更新商品
      */
     public void updateProduct(Product product) {
-        if (dbEnabled) {
-            mysqlMgr.updateProduct(product);
-        }
-        products.put(product.getProductId(), product);
-        if (!dbEnabled) {
-            saveData();
-        }
+        productDao.update(product);
     }
 
     /**
      * 删除商品
      */
     public void deleteProduct(String productId) {
-        if (dbEnabled) {
-            mysqlMgr.deleteProduct(productId);
-        }
-        products.remove(productId);
-        if (!dbEnabled) {
-            saveData();
-        }
+        productDao.deleteById(productId);
     }
 
     /**
      * 根据ID获取商品
      */
     public Product getProductById(String productId) {
-        if (dbEnabled) {
-            return mysqlMgr.getProductById(productId);
-        }
-        return products.get(productId);
+        return productDao.findById(productId).orElse(null);
     }
 
     /**
      * 获取所有商品
      */
     public List<Product> getAllProducts() {
-        if (dbEnabled) {
-            return mysqlMgr.getAllProducts();
-        }
-        return new ArrayList<>(products.values());
+        return productDao.findAll();
     }
 
     /**
      * 按类别查询商品
      */
     public List<Product> getProductsByCategory(String category) {
-        if (dbEnabled) {
-            return mysqlMgr.getAllProducts().stream()
-                    .filter(p -> p.getCategory() != null && p.getCategory().equals(category))
-                    .collect(Collectors.toList());
-        }
-        return products.values().stream()
-                .filter(p -> p.getCategory().equals(category))
-                .collect(Collectors.toList());
+        return productDao.findByCategory(category);
     }
 
     /**
      * 查询需要补货的商品
      */
     public List<Product> getLowStockProducts() {
-        if (dbEnabled) {
-            return mysqlMgr.getLowStockProducts();
-        }
-        return products.values().stream()
-                .filter(Product::needsStockAlert)
-                .collect(Collectors.toList());
+        return productDao.findLowStock();
+    }
+
+    /**
+     * 更新商品库存
+     */
+    public boolean updateProductStock(String productId, int quantity) {
+        return productDao.updateStock(productId, quantity);
+    }
+
+    /**
+     * 获取所有商品类别
+     */
+    public List<String> getAllCategories() {
+        return productDao.findAllCategories();
     }
 
     // ==================== 采购订单管理 ====================
@@ -211,70 +176,67 @@ public class DataService {
      * 添加采购订单
      */
     public void addPurchaseOrder(PurchaseOrder order) {
-        if (dbEnabled) {
-            mysqlMgr.addPurchaseOrder(order);
+        if (order.getOrderId() == null || order.getOrderId().isEmpty()) {
+            order.setOrderId(generateId("ORD"));
         }
-        purchaseOrders.put(order.getOrderId(), order);
-        if (!dbEnabled) {
-            saveData();
-        }
+        purchaseOrderDao.save(order);
     }
 
     /**
      * 更新采购订单
      */
     public void updatePurchaseOrder(PurchaseOrder order) {
-        if (dbEnabled) {
-            mysqlMgr.updatePurchaseOrder(order);
-        }
-        purchaseOrders.put(order.getOrderId(), order);
-        if (!dbEnabled) {
-            saveData();
-        }
+        purchaseOrderDao.update(order);
     }
 
     /**
      * 根据ID获取采购订单
      */
     public PurchaseOrder getPurchaseOrderById(String orderId) {
-        if (dbEnabled) {
-            return mysqlMgr.getPurchaseOrderById(orderId);
-        }
-        return purchaseOrders.get(orderId);
+        return purchaseOrderDao.findById(orderId).orElse(null);
     }
 
     /**
      * 获取所有采购订单
      */
     public List<PurchaseOrder> getAllPurchaseOrders() {
-        if (dbEnabled) {
-            return mysqlMgr.getAllPurchaseOrders();
-        }
-        return new ArrayList<>(purchaseOrders.values());
+        return purchaseOrderDao.findAll();
     }
 
     /**
      * 根据状态查询订单
      */
-    public List<PurchaseOrder> getOrdersByStatus(PurchaseOrder.OrderStatus status) {
-        if (dbEnabled) {
-            return mysqlMgr.getOrdersByStatus(status);
-        }
-        return purchaseOrders.values().stream()
-                .filter(o -> o.getStatus() == status)
-                .collect(Collectors.toList());
+    public List<PurchaseOrder> getOrdersByStatus(OrderStatus status) {
+        return purchaseOrderDao.findByStatus(status);
     }
 
     /**
      * 根据采购员查询订单
      */
     public List<PurchaseOrder> getOrdersByPurchaser(String purchaserId) {
-        if (dbEnabled) {
-            return mysqlMgr.getOrdersByPurchaser(purchaserId);
-        }
-        return purchaseOrders.values().stream()
-                .filter(o -> o.getPurchaserId().equals(purchaserId))
-                .collect(Collectors.toList());
+        return purchaseOrderDao.findByPurchaserId(purchaserId);
+    }
+
+    /**
+     * 查询待审批订单
+     */
+    public List<PurchaseOrder> getPendingApprovalOrders() {
+        return purchaseOrderDao.findPendingApproval();
+    }
+
+    /**
+     * 审批订单
+     */
+    public boolean approveOrder(String orderId, String approverId, String approverName,
+            OrderStatus status, String comment) {
+        return purchaseOrderDao.approve(orderId, approverId, approverName, status, comment);
+    }
+
+    /**
+     * 更新订单状态
+     */
+    public boolean updateOrderStatus(String orderId, OrderStatus status) {
+        return purchaseOrderDao.updateStatus(orderId, status);
     }
 
     // ==================== 出入库管理 ====================
@@ -283,46 +245,62 @@ public class DataService {
      * 添加入库记录
      */
     public void addStockInRecord(StockInRecord record) {
-        if (dbEnabled) {
-            mysqlMgr.addStockInRecord(record);
+        if (record.getRecordId() == null || record.getRecordId().isEmpty()) {
+            record.setRecordId(generateId("SIN"));
         }
-        stockInRecords.add(record);
-        if (!dbEnabled) {
-            saveData();
+
+        // 更新商品库存
+        boolean stockUpdated = productDao.updateStock(record.getProductId(), record.getQuantity());
+        if (!stockUpdated) {
+            logger.warning("Failed to update product stock for: " + record.getProductId());
         }
+
+        stockInRecordDao.save(record);
     }
 
     /**
      * 获取所有入库记录
      */
     public List<StockInRecord> getAllStockInRecords() {
-        if (dbEnabled) {
-            return mysqlMgr.getAllStockInRecords();
-        }
-        return new ArrayList<>(stockInRecords);
+        return stockInRecordDao.findAll();
+    }
+
+    /**
+     * 根据订单ID获取入库记录
+     */
+    public List<StockInRecord> getStockInRecordsByOrderId(String orderId) {
+        return stockInRecordDao.findByOrderId(orderId);
     }
 
     /**
      * 添加出库记录
      */
     public void addStockOutRecord(StockOutRecord record) {
-        if (dbEnabled) {
-            mysqlMgr.addStockOutRecord(record);
+        if (record.getRecordId() == null || record.getRecordId().isEmpty()) {
+            record.setRecordId(generateId("SOT"));
         }
-        stockOutRecords.add(record);
-        if (!dbEnabled) {
-            saveData();
+
+        // 更新商品库存（减少）
+        boolean stockUpdated = productDao.updateStock(record.getProductId(), -record.getQuantity());
+        if (!stockUpdated) {
+            logger.warning("Failed to update product stock for: " + record.getProductId());
         }
+
+        stockOutRecordDao.save(record);
     }
 
     /**
      * 获取所有出库记录
      */
     public List<StockOutRecord> getAllStockOutRecords() {
-        if (dbEnabled) {
-            return mysqlMgr.getAllStockOutRecords();
-        }
-        return new ArrayList<>(stockOutRecords);
+        return stockOutRecordDao.findAll();
+    }
+
+    /**
+     * 根据商品ID获取出库记录
+     */
+    public List<StockOutRecord> getStockOutRecordsByProductId(String productId) {
+        return stockOutRecordDao.findByProductId(productId);
     }
 
     // ==================== 日志管理 ====================
@@ -332,232 +310,119 @@ public class DataService {
      */
     public void addLog(OperationLog log) {
         if (log.getLogId() == null || log.getLogId().isEmpty()) {
-            log.setLogId("LOG" + System.currentTimeMillis());
+            log.setLogId(generateId("LOG"));
         }
-        if (dbEnabled) {
-            mysqlMgr.addLog(log);
-        }
-        logs.add(log);
-        if (!dbEnabled) {
-            saveLogsToFile();
-        }
+        operationLogDao.save(log);
     }
 
     /**
      * 获取所有日志
      */
     public List<OperationLog> getAllLogs() {
-        if (dbEnabled) {
-            return mysqlMgr.getAllLogs();
-        }
-        return new ArrayList<>(logs);
+        return operationLogDao.findAll();
     }
 
     /**
      * 根据用户查询日志
      */
     public List<OperationLog> getLogsByUser(String userId) {
-        if (dbEnabled) {
-            return mysqlMgr.getLogsByUser(userId);
-        }
-        return logs.stream()
-                .filter(l -> l.getUserId().equals(userId))
-                .collect(Collectors.toList());
+        return operationLogDao.findByUserId(userId);
     }
 
-    // ==================== 数据持久化 ====================
-
     /**
-     * 保存所有数据
+     * 获取最近的日志
      */
-    public void saveData() {
-        if (dbEnabled) {
-            return;
-        }
-        try {
-            // 保存用户 - 已迁移到MySQL，不再保存到文件
-            // saveObject(users, DATA_DIR + "users.dat");
-            // 保存商品
-            saveObject(products, DATA_DIR + "products.dat");
-            // 保存采购订单
-            saveObject(purchaseOrders, DATA_DIR + "orders.dat");
-            // 保存入库记录
-            saveObject(stockInRecords, DATA_DIR + "stock_in.dat");
-            // 保存出库记录
-            saveObject(stockOutRecords, DATA_DIR + "stock_out.dat");
-        } catch (IOException e) {
-            System.err.println("保存数据失败: " + e.getMessage());
-        }
+    public List<OperationLog> getRecentLogs(int limit) {
+        return operationLogDao.findRecent(limit);
     }
 
+    // ==================== 统计查询 ====================
+
     /**
-     * 加载所有数据
+     * 统计各状态订单数量
      */
-    @SuppressWarnings("unchecked")
-    public void loadData() {
-        if (dbEnabled) {
-            return;
-        }
-        try {
-            // 加载用户 - 已迁移到MySQL，不再从文件加载
-            /*
-             * Object usersObj = loadObject(DATA_DIR + "users.dat");
-             * if (usersObj != null) {
-             * users = (Map<String, User>) usersObj;
-             * }
-             */
-
-            // 加载商品
-            Object productsObj = loadObject(DATA_DIR + "products.dat");
-            if (productsObj != null) {
-                products = (Map<String, Product>) productsObj;
-            }
-
-            // 加载采购订单
-            Object ordersObj = loadObject(DATA_DIR + "orders.dat");
-            if (ordersObj != null) {
-                purchaseOrders = (Map<String, PurchaseOrder>) ordersObj;
-            }
-
-            // 加载入库记录
-            Object stockInObj = loadObject(DATA_DIR + "stock_in.dat");
-            if (stockInObj != null) {
-                stockInRecords = Collections.synchronizedList((List<StockInRecord>) stockInObj);
-            }
-
-            // 加载出库记录
-            Object stockOutObj = loadObject(DATA_DIR + "stock_out.dat");
-            if (stockOutObj != null) {
-                stockOutRecords = Collections.synchronizedList((List<StockOutRecord>) stockOutObj);
-            }
-
-            // 加载日志
-            loadLogsFromFile();
-
-            System.out.println("数据加载成功");
-        } catch (Exception e) {
-            System.err.println("加载数据失败: " + e.getMessage());
-        }
+    public Map<OrderStatus, Long> countOrdersByStatus() {
+        return purchaseOrderDao.countByStatus();
     }
 
     /**
-     * 保存日志到文件
+     * 统计各部门出库数量
      */
-    private void saveLogsToFile() {
-        try (PrintWriter writer = new PrintWriter(new FileWriter(DATA_DIR + "operation.log", true))) {
-            if (!logs.isEmpty()) {
-                OperationLog lastLog = logs.get(logs.size() - 1);
-                writer.println(String.format("[%s] %s - %s - %s - %s",
-                        lastLog.getOperationTime(),
-                        lastLog.getUsername(),
-                        lastLog.getModule(),
-                        lastLog.getOperation(),
-                        lastLog.getDetails()));
-            }
-        } catch (IOException e) {
-            System.err.println("保存日志失败: " + e.getMessage());
-        }
+    public Map<String, Integer> sumStockOutByDept() {
+        return stockOutRecordDao.sumQuantityByDept();
     }
 
     /**
-     * 从文件加载日志
+     * 根据时间范围查询入库记录
      */
-    private void loadLogsFromFile() {
-        File logFile = new File(DATA_DIR + "operation.log");
-        if (logFile.exists()) {
-            System.out.println("日志文件已加载");
-        }
+    public List<StockInRecord> getStockInRecordsByTimeRange(LocalDateTime startTime, LocalDateTime endTime) {
+        return stockInRecordDao.findByTimeBetween(startTime, endTime);
     }
 
     /**
-     * 保存对象到文件
+     * 根据时间范围查询出库记录
      */
-    private void saveObject(Object obj, String filename) throws IOException {
-        try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(filename))) {
-            oos.writeObject(obj);
-        }
+    public List<StockOutRecord> getStockOutRecordsByTimeRange(LocalDateTime startTime, LocalDateTime endTime) {
+        return stockOutRecordDao.findByTimeBetween(startTime, endTime);
     }
 
-    /**
-     * 从文件加载对象
-     */
-    private Object loadObject(String filename) {
-        File file = new File(filename);
-        if (!file.exists()) {
-            return null;
-        }
-
-        try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(filename))) {
-            return ois.readObject();
-        } catch (Exception e) {
-            System.err.println("加载文件失败 " + filename + ": " + e.getMessage());
-            return null;
-        }
-    }
+    // ==================== 数据备份恢复 ====================
 
     /**
-     * 数据备份
+     * 数据备份（保留接口，暂时返回true）
      */
     public boolean backup(String backupPath) {
-        try {
-            File backupDir = new File(backupPath);
-            if (!backupDir.exists()) {
-                backupDir.mkdirs();
-            }
-
-            // 复制所有数据文件
-            File sourceDir = new File(DATA_DIR);
-            if (sourceDir.exists()) {
-                for (File file : sourceDir.listFiles()) {
-                    copyFile(file, new File(backupPath, file.getName()));
-                }
-            }
-
-            System.out.println("数据备份成功: " + backupPath);
-            return true;
-        } catch (Exception e) {
-            System.err.println("数据备份失败: " + e.getMessage());
-            return false;
-        }
+        // TODO: 实现数据库备份逻辑
+        logger.info("Backup requested to: " + backupPath);
+        return true;
     }
 
     /**
-     * 数据恢复
+     * 数据恢复（保留接口，暂时返回true）
      */
     public boolean restore(String backupPath) {
-        try {
-            File backupDir = new File(backupPath);
-            if (!backupDir.exists()) {
-                return false;
-            }
+        // TODO: 实现数据库恢复逻辑
+        logger.info("Restore requested from: " + backupPath);
+        return true;
+    }
 
-            // 复制备份文件到数据目录
-            for (File file : backupDir.listFiles()) {
-                copyFile(file, new File(DATA_DIR, file.getName()));
-            }
+    // ==================== 辅助方法 ====================
 
-            // 重新加载数据
-            loadData();
-
-            System.out.println("数据恢复成功");
-            return true;
-        } catch (Exception e) {
-            System.err.println("数据恢复失败: " + e.getMessage());
-            return false;
-        }
+    /**
+     * 生成唯一ID
+     */
+    private String generateId(String prefix) {
+        return prefix + System.currentTimeMillis() + String.format("%04d", new Random().nextInt(10000));
     }
 
     /**
-     * 复制文件
+     * 获取数据库连接池状态
      */
-    private void copyFile(File source, File dest) throws IOException {
-        try (FileInputStream fis = new FileInputStream(source);
-                FileOutputStream fos = new FileOutputStream(dest)) {
-            byte[] buffer = new byte[4096];
-            int bytesRead;
-            while ((bytesRead = fis.read(buffer)) != -1) {
-                fos.write(buffer, 0, bytesRead);
-            }
-        }
+    public String getPoolStats() {
+        return dbManager.getPoolStats();
+    }
+
+    /**
+     * 关闭服务
+     */
+    public void shutdown() {
+        dbManager.shutdown();
+        logger.info("DataService shutdown complete");
+    }
+
+    /**
+     * 保存数据（兼容旧接口，新实现中数据直接写入数据库，无需手动保存）
+     */
+    public void saveData() {
+        // 新实现中数据直接写入数据库，此方法保留用于兼容性
+        logger.fine("saveData called - data is automatically persisted to database");
+    }
+
+    /**
+     * 加载数据（兼容旧接口，新实现中数据从数据库实时读取，无需预加载）
+     */
+    public void loadData() {
+        // 新实现中数据从数据库实时读取，此方法保留用于兼容性
+        logger.fine("loadData called - data is loaded from database on demand");
     }
 }

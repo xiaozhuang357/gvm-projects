@@ -77,36 +77,36 @@ public class WMSServer {
 
     /**
      * 初始化示例数据
+     * 仅在数据不存在时插入，避免重复插入导致主键冲突
      */
     private void initializeData() {
-        // // 初始化用户
-        // dataService.addUser(new User("U001", "admin", "admin123", "系统管理员",
-        // User.UserRole.WAREHOUSE_ADMIN));
-        // dataService.addUser(new User("U002", "manager1", "123", "张经理",
-        // User.UserRole.DEPARTMENT_MANAGER));
-        // dataService.addUser(new User("U003", "general", "123", "李总",
-        // User.UserRole.GENERAL_MANAGER));
-        // dataService.addUser(new User("U004", "purchaser", "123", "王采购",
+
         // User.UserRole.PURCHASER));
 
-        // 初始化商品
-        Product p1 = new Product("P001", "联想笔记本电脑", "电子产品", 5500.0, 5, 50);
-        p1.setCurrentStock(25);
-        p1.setUnit("台");
-        p1.setSupplier("联想集团");
-        dataService.addProduct(p1);
+        // 初始化商品 - 仅在不存在时插入
+        if (dataService.getProductById("P001") == null) {
+            Product p1 = new Product("P001", "联想笔记本电脑", "电子产品", 5500.0, 5, 50);
+            p1.setCurrentStock(25);
+            p1.setUnit("台");
+            p1.setSupplier("联想集团");
+            dataService.addProduct(p1);
+        }
 
-        Product p2 = new Product("P002", "办公打印纸", "办公用品", 25.0, 100, 1000);
-        p2.setCurrentStock(500);
-        p2.setUnit("包");
-        p2.setSupplier("晨光文具");
-        dataService.addProduct(p2);
+        if (dataService.getProductById("P002") == null) {
+            Product p2 = new Product("P002", "办公打印纸", "办公用品", 25.0, 100, 1000);
+            p2.setCurrentStock(500);
+            p2.setUnit("包");
+            p2.setSupplier("晨光文具");
+            dataService.addProduct(p2);
+        }
 
-        Product p3 = new Product("P003", "矿泉水", "食品饮料", 2.5, 200, 2000);
-        p3.setCurrentStock(150);
-        p3.setUnit("箱");
-        p3.setSupplier("农夫山泉");
-        dataService.addProduct(p3);
+        if (dataService.getProductById("P003") == null) {
+            Product p3 = new Product("P003", "矿泉水", "食品饮料", 2.5, 200, 2000);
+            p3.setCurrentStock(150);
+            p3.setUnit("箱");
+            p3.setSupplier("农夫山泉");
+            dataService.addProduct(p3);
+        }
 
         System.out.println("示例数据初始化完成");
     }
@@ -138,12 +138,26 @@ public class WMSServer {
                 Message message;
                 // 循环读取客户端发送的消息对象
                 while ((message = (Message) in.readObject()) != null) {
-                    handleMessage(message);
+                    try {
+                        System.out.println("收到消息类型: " + message.getType() + ", 用户: " + userId);
+                        handleMessage(message);
+                    } catch (Exception innerEx) {
+                        System.err.println("处理消息内部异常 [" + message.getType() + "]: " + innerEx.getMessage());
+                        innerEx.printStackTrace();
+                        // 尝试发送错误响应
+                        try {
+                            Message errorResponse = Message.error(message.getType(),
+                                    "服务器处理错误: " + innerEx.getMessage());
+                            sendMessage(errorResponse);
+                        } catch (Exception sendEx) {
+                            System.err.println("发送错误响应失败: " + sendEx.getMessage());
+                        }
+                    }
                 }
             } catch (EOFException e) {
                 System.out.println("客户端断开连接: " + userId);
             } catch (Exception e) {
-                System.err.println("处理客户端消息错误: " + e.getMessage());
+                System.err.println("处理客户端消息错误 (外层): " + e.getMessage());
                 e.printStackTrace();
             } finally {
                 cleanup();
@@ -156,84 +170,90 @@ public class WMSServer {
         private void handleMessage(Message message) throws IOException {
             Message response = null;
 
-            switch (message.getType()) {
-                case LOGIN_REQUEST:
-                    response = handleLogin(message);
-                    break;
-                case LOGOUT:
-                    response = handleLogout(message);
-                    break;
-                case USER_LIST:
-                    response = handleUserList(message);
-                    break;
-                case USER_ADD:
-                    response = handleUserAdd(message);
-                    break;
-                case USER_DELETE:
-                    response = handleUserDelete(message);
-                    break;
-                case PRODUCT_LIST:
-                    response = handleProductList(message);
-                    break;
-                case PRODUCT_ADD:
-                    response = handleProductAdd(message);
-                    break;
-                case PRODUCT_UPDATE:
-                    response = handleProductUpdate(message);
-                    break;
-                case PRODUCT_DELETE:
-                    response = handleProductDelete(message);
-                    break;
-                case PURCHASE_ORDER_ADD:
-                case PURCHASE_ORDER_CREATE:
-                    response = handlePurchaseOrderCreate(message);
-                    break;
-                case PURCHASE_ORDER_LIST:
-                    response = handlePurchaseOrderList(message);
-                    break;
-                case PURCHASE_ORDER_APPROVE:
-                    response = handlePurchaseOrderApprove(message);
-                    break;
-                case PURCHASE_ORDER_ARRIVAL_CONFIRM:
-                    response = handlePurchaseOrderArrivalConfirm(message);
-                    break;
-                case PRODUCT_STOCK_ALERT:
-                    response = handleProductStockAlert(message);
-                    break;
-                case PURCHASE_ORDER_REJECT:
-                    response = handlePurchaseOrderReject(message);
-                    break;
-                case PURCHASE_ORDER_DELETE:
-                    response = handlePurchaseOrderDelete(message);
-                    break;
-                case STOCK_IN:
-                case STOCK_IN_ADD:
-                    response = handleStockIn(message);
-                    break;
-                case STOCK_OUT:
-                case STOCK_OUT_ADD:
-                    response = handleStockOut(message);
-                    break;
-                case STOCK_ADJUSTMENT:
-                    response = handleStockAdjustment(message);
-                    break;
-                case STOCK_IN_LIST:
-                    response = handleStockInList(message);
-                    break;
-                case STOCK_OUT_LIST:
-                    response = handleStockOutList(message);
-                    break;
-                case STOCK_RECORD_LIST:
-                    response = handleStockRecordList(message);
-                    break;
-                case LOG_LIST:
-                    response = handleLogList(message);
-                    break;
-                case HEARTBEAT:
-                    response = Message.success(Message.MessageType.HEARTBEAT, null, "OK");
-                    break;
-                default:
-                    response = Message.error(Message.MessageType.ERROR, "未知的消息类型");
+            try {
+                switch (message.getType()) {
+                    case LOGIN_REQUEST:
+                        response = handleLogin(message);
+                        break;
+                    case LOGOUT:
+                        response = handleLogout(message);
+                        break;
+                    case USER_LIST:
+                        response = handleUserList(message);
+                        break;
+                    case USER_ADD:
+                        response = handleUserAdd(message);
+                        break;
+                    case USER_DELETE:
+                        response = handleUserDelete(message);
+                        break;
+                    case PRODUCT_LIST:
+                        response = handleProductList(message);
+                        break;
+                    case PRODUCT_ADD:
+                        response = handleProductAdd(message);
+                        break;
+                    case PRODUCT_UPDATE:
+                        response = handleProductUpdate(message);
+                        break;
+                    case PRODUCT_DELETE:
+                        response = handleProductDelete(message);
+                        break;
+                    case PURCHASE_ORDER_ADD:
+                    case PURCHASE_ORDER_CREATE:
+                        response = handlePurchaseOrderCreate(message);
+                        break;
+                    case PURCHASE_ORDER_LIST:
+                        response = handlePurchaseOrderList(message);
+                        break;
+                    case PURCHASE_ORDER_APPROVE:
+                        response = handlePurchaseOrderApprove(message);
+                        break;
+                    case PURCHASE_ORDER_ARRIVAL_CONFIRM:
+                        response = handlePurchaseOrderArrivalConfirm(message);
+                        break;
+                    case PRODUCT_STOCK_ALERT:
+                        response = handleProductStockAlert(message);
+                        break;
+                    case PURCHASE_ORDER_REJECT:
+                        response = handlePurchaseOrderReject(message);
+                        break;
+                    case PURCHASE_ORDER_DELETE:
+                        response = handlePurchaseOrderDelete(message);
+                        break;
+                    case STOCK_IN:
+                    case STOCK_IN_ADD:
+                        response = handleStockIn(message);
+                        break;
+                    case STOCK_OUT:
+                    case STOCK_OUT_ADD:
+                        response = handleStockOut(message);
+                        break;
+                    case STOCK_ADJUSTMENT:
+                        response = handleStockAdjustment(message);
+                        break;
+                    case STOCK_IN_LIST:
+                        response = handleStockInList(message);
+                        break;
+                    case STOCK_OUT_LIST:
+                        response = handleStockOutList(message);
+                        break;
+                    case STOCK_RECORD_LIST:
+                        response = handleStockRecordList(message);
+                        break;
+                    case LOG_LIST:
+                        response = handleLogList(message);
+                        break;
+                    case HEARTBEAT:
+                        response = Message.success(Message.MessageType.HEARTBEAT, null, "OK");
+                        break;
+                    default:
+                        response = Message.error(Message.MessageType.ERROR, "未知的消息类型");
+                }
+            } catch (Exception e) {
+                System.err.println("处理消息异常 [" + message.getType() + "]: " + e.getMessage());
+                e.printStackTrace();
+                response = Message.error(message.getType(), "服务器处理错误: " + e.getMessage());
             }
 
             if (response != null) {
@@ -244,7 +264,7 @@ public class WMSServer {
         /**
          * 处理登录
          */
-        @SuppressWarnings("unchecked")
+        // @SuppressWarnings("unchecked")
         private Message handleLogin(Message message) {
             Map<String, String> credentials = (Map<String, String>) message.getData();
             String username = credentials.get("username");
@@ -385,7 +405,7 @@ public class WMSServer {
             dataService.addPurchaseOrder(order);
             dataService.addLog(new OperationLog(currentUser.getUserId(), currentUser.getUsername(),
                     "创建", "采购管理", "创建采购订单: " + order.getOrderId() + ", 金额: " + order.getTotalAmount()));
-            return Message.success(Message.MessageType.PURCHASE_ORDER_CREATE, order, "采购订单创建成功");
+            return Message.success(message.getType(), order, "采购订单创建成功");
         }
 
         /**
@@ -505,8 +525,7 @@ public class WMSServer {
             Product product = dataService.getProductById(record.getProductId());
 
             if (product != null) {
-                product.setCurrentStock(product.getCurrentStock() + record.getQuantity());
-                dataService.updateProduct(product);
+                // 注意：addStockInRecord 内部已经会更新库存，这里不需要重复更新
                 dataService.addStockInRecord(record);
 
                 dataService.addLog(new OperationLog(currentUser.getUserId(), currentUser.getUsername(),
@@ -525,14 +544,15 @@ public class WMSServer {
 
             if (product != null) {
                 if (product.getCurrentStock() >= record.getQuantity()) {
-                    product.setCurrentStock(product.getCurrentStock() - record.getQuantity());
-                    dataService.updateProduct(product);
+                    // 注意：addStockOutRecord 内部已经会更新库存，这里不需要重复更新
                     dataService.addStockOutRecord(record);
 
                     dataService.addLog(new OperationLog(currentUser.getUserId(), currentUser.getUsername(),
                             "出库", "库存管理", "商品出库: " + product.getProductName() + ", 数量: " + record.getQuantity()));
-                    // 检查是否触发库存预警
-                    if (product.needsStockAlert()) {
+
+                    // 重新获取更新后的商品信息检查库存预警
+                    product = dataService.getProductById(record.getProductId());
+                    if (product != null && product.needsStockAlert()) {
                         dataService.addLog(new OperationLog(currentUser.getUserId(), currentUser.getUsername(),
                                 "库存预警", "库存管理", "库存低于预警值: " + product.getProductName() +
                                         ", 当前库存: " + product.getCurrentStock()));
