@@ -31,23 +31,36 @@ import javafx.stage.Stage;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
+/**
+ * 仓库管理员主界面控制器 (WarehouseAdminController)
+ * <p>
+ * 这是系统的核心管理控制台，集成了四个主要模块：
+ * 1. 商品管理 (CRUD, 高级筛选)
+ * 2. 库存管理 (入库, 出库, 盘点, 采购单收货)
+ * 3. 用户管理 (仅管理员可见)
+ * 4. 报表与日志 (查看操作记录)
+ * <p>
+ * 该控制器采用了轮询机制 (Polling) 来保持与服务器数据的同步。
+ */
 public class WarehouseAdminController implements Initializable {
 
+    // --- 出库相关控件 ---
     @FXML
-    private ComboBox<String> stockOutProductCombo;
+    private ComboBox<String> stockOutProductCombo; // 出库产品选择
     @FXML
-    private TextField stockOutQuantityField;
+    private TextField stockOutQuantityField; // 出库数量
     @FXML
-    private TextField recipientField;
+    private TextField recipientField; // 领用人
     @FXML
-    private TextField recipientDeptField;
+    private TextField recipientDeptField; // 领用部门
     @FXML
-    private TextArea stockOutRemarkArea;
+    private TextArea stockOutRemarkArea; // 出库备注
 
+    // --- 库存记录/流水控件 ---
     @FXML
     private TableView<StockRecord> stockRecordTableView;
     @FXML
-    private ComboBox<String> recordTypeCombo;
+    private ComboBox<String> recordTypeCombo; // 筛选记录类型(入库/出库)
     @FXML
     private TableColumn<StockRecord, String> recordIdColumn;
     @FXML
@@ -63,7 +76,7 @@ public class WarehouseAdminController implements Initializable {
     @FXML
     private TableColumn<StockRecord, String> recordRemarkColumn;
 
-    // 用户管理
+    // --- 用户管理控件 ---
     @FXML
     private TableView<User> userTableView;
     @FXML
@@ -79,33 +92,38 @@ public class WarehouseAdminController implements Initializable {
     @FXML
     private TableColumn<User, String> lastLoginColumn;
     @FXML
-    private TableColumn<User, Void> userActionColumn;
+    private TableColumn<User, Void> userActionColumn; // 用户操作列(编辑/删除)
 
-    // 报表统计
+    // --- 仪表盘统计控件 ---
     @FXML
-    private Text totalProductsText;
+    private Text totalProductsText; // 商品总数
     @FXML
-    private Text lowStockText;
+    private Text lowStockText; // 低库存预警数
     @FXML
-    private Text totalUsersText;
+    private Text totalUsersText; // 总用户数
 
-    // 公共字段与数据
+    // --- 核心数据模型与服务 ---
     private User currentUser;
     private SocketClient socketClient;
+
+    // ObservableList 自动绑定到 UI，数据变化时表格会自动刷新
     private ObservableList<Product> productList = FXCollections.observableArrayList();
-    private FilteredList<Product> filteredProducts;
+    private FilteredList<Product> filteredProducts; // 包装列表，用于实现搜索和筛选
+
+    // 组合筛选条件：快速搜索 + 高级筛选
     private Predicate<Product> quickSearchPredicate = product -> true;
     private Predicate<Product> advancedProductPredicate = product -> true;
+
     private ObservableList<User> userList = FXCollections.observableArrayList();
     private ObservableList<StockRecord> stockRecordList = FXCollections.observableArrayList();
     private ObservableList<PurchaseOrder> allOrderList = FXCollections.observableArrayList();
 
     @FXML
-    private Label userInfoLabel;
+    private Label userInfoLabel; // 顶部用户信息展示
     @FXML
     private Button logoutButton;
 
-    // 页签容器
+    // --- 页面容器 (用于切换 Tab) ---
     @FXML
     private Pane productPane;
     @FXML
@@ -115,9 +133,9 @@ public class WarehouseAdminController implements Initializable {
     @FXML
     private Pane reportPane;
 
-    // 产品相关控件
+    // --- 产品表格控件 ---
     @FXML
-    private TextField productSearchField;
+    private TextField productSearchField; // 快速搜索框
     @FXML
     private TableView<Product> productTableView;
     @FXML
@@ -141,9 +159,9 @@ public class WarehouseAdminController implements Initializable {
     @FXML
     private TableColumn<Product, Void> productActionColumn;
 
-    // 入库/出库控件
+    // --- 入库/操作控件 ---
     @FXML
-    private TextField batchNumberField;
+    private TextField batchNumberField; // 批次号(自动生成)
     @FXML
     private ComboBox<String> stockInProductCombo;
     @FXML
@@ -155,35 +173,41 @@ public class WarehouseAdminController implements Initializable {
     @FXML
     private Button stockOutBtn;
     @FXML
-    private TextField warehouseLocationField;
+    private TextField warehouseLocationField; // 库位
 
+    /**
+     * JavaFX 初始化方法，FXML 加载完成后自动调用。
+     */
     @Override
     public void initialize(URL location, ResourceBundle resources) {
+        // 初始化各个表格的列映射和 CellFactory
         initializeProductTable();
         initializeUserTable();
         initializeStockRecordTable();
 
-        // 自动生成批次号
+        // 界面初始化设置
         batchNumberField.setText(generateBatchNumber());
-        batchNumberField.setEditable(false);
+        batchNumberField.setEditable(false); // 批次号由系统生成，不可手动修改
 
-        // 初始化记录类型下拉框
         recordTypeCombo.setItems(FXCollections.observableArrayList("全部", "入库", "出库"));
         recordTypeCombo.setValue("全部");
     }
 
     /**
-     * 设置当前用户
+     * 设置当前登录用户，并启动后台数据同步。
+     * 
+     * @param user 登录成功的用户对象
      */
     public void setCurrentUser(User user) {
         this.currentUser = user;
         this.socketClient = LoginController.getSocketClient();
         userInfoLabel.setText("当前用户: " + user.getFullName() + " (" + user.getRole().getDisplayName() + ")");
 
-        // 加载数据
+        // 1. 立即加载一次数据
         loadDataFromServer();
 
-        // 后台轮询刷新，确保入库/到货/审批变更能及时反映到界面
+        // 2. 启动后台轮询线程 (Polling)
+        // 目的：即使没有 WebSocket 推送，也能定期（每5秒）获取最新的库存、订单和用户变动。
         new Thread(() -> {
             while (LoginController.getSocketClient().isConnected()) {
                 try {
@@ -197,11 +221,13 @@ public class WarehouseAdminController implements Initializable {
     }
 
     /**
-     * 从服务器加载数据
+     * 核心数据加载方法。
+     * 在后台线程中请求数据，收到响应后通过 Platform.runLater 更新 UI。
+     * 防止阻塞 JavaFX 主线程 (UI Freeze)。
      */
     private void loadDataFromServer() {
         new Thread(() -> {
-            // 加载产品列表
+            // 1. 加载产品列表
             Message response = socketClient.sendAndReceive(new Message(Message.MessageType.PRODUCT_LIST));
             if (response.isSuccess()) {
                 @SuppressWarnings("unchecked")
@@ -209,12 +235,12 @@ public class WarehouseAdminController implements Initializable {
                 Platform.runLater(() -> {
                     productList.clear();
                     productList.addAll(products);
-                    updateProductCombos();
-                    updateStatistics();
+                    updateProductCombos(); // 更新入库/出库下拉框的选项
+                    updateStatistics(); // 更新顶部统计数字
                 });
             }
 
-            // 加载用户列表
+            // 2. 加载用户列表
             Message userResponse = socketClient.getUserList();
             if (userResponse.isSuccess()) {
                 @SuppressWarnings("unchecked")
@@ -226,7 +252,7 @@ public class WarehouseAdminController implements Initializable {
                 });
             }
 
-            // 加载采购订单（用于仓库查看已批准订单）
+            // 3. 加载采购订单（用于仓库收货流程）
             Message ordersResp = socketClient.sendAndReceive(new Message(Message.MessageType.PURCHASE_ORDER_LIST));
             if (ordersResp != null && ordersResp.isSuccess()) {
                 @SuppressWarnings("unchecked")
@@ -241,11 +267,12 @@ public class WarehouseAdminController implements Initializable {
     }
 
     /**
-     * 初始化产品表格
+     * 初始化产品表格及自定义操作列（编辑/删除按钮）。
      */
     private void initializeProductTable() {
         productIdColumn.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().getProductId()));
         productNameColumn.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().getProductName()));
+        // ... 其他简单属性绑定 ...
         categoryColumn.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().getCategory()));
         priceColumn.setCellValueFactory(
                 data -> new SimpleStringProperty(String.format("%.2f", data.getValue().getPrice())));
@@ -258,7 +285,7 @@ public class WarehouseAdminController implements Initializable {
                 .setCellValueFactory(data -> new SimpleStringProperty(String.valueOf(data.getValue().getMaxStock())));
         supplierColumn.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().getSupplier()));
 
-        // 操作列
+        // 自定义操作列：添加“编辑”和“删除”按钮
         productActionColumn.setCellFactory(param -> new TableCell<>() {
             private final Button editBtn = new Button("编辑");
             private final Button deleteBtn = new Button("删除");
@@ -280,10 +307,15 @@ public class WarehouseAdminController implements Initializable {
             }
         });
 
+        // 绑定 FilteredList 以支持搜索和筛选
         filteredProducts = new FilteredList<>(productList, product -> true);
         productTableView.setItems(filteredProducts);
     }
 
+    /**
+     * 刷新产品列表的过滤器。
+     * 将“快速搜索”和“高级筛选”的条件进行逻辑与 (AND) 操作。
+     */
     private void refreshProductFilter() {
         if (filteredProducts != null) {
             filteredProducts.setPredicate(product -> quickSearchPredicate.test(product)
@@ -291,10 +323,10 @@ public class WarehouseAdminController implements Initializable {
         }
     }
 
-    /**
-     * 初始化用户表格
-     */
+    // ... (User Table Initialization, similar to Product Table) ...
     private void initializeUserTable() {
+        // ... (省略了常规列绑定代码，与 initializeProductTable 逻辑一致) ...
+        // 绑定各列数据...
         userIdColumn.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().getUserId()));
         usernameColumn.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().getUsername()));
         fullNameColumn.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().getFullName()));
@@ -308,7 +340,7 @@ public class WarehouseAdminController implements Initializable {
                         ? data.getValue().getLastLoginTime().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
                         : "未登录"));
 
-        // 操作列
+        // 用户操作列
         userActionColumn.setCellFactory(param -> new TableCell<>() {
             private final Button editBtn = new Button("编辑");
             private final Button deleteBtn = new Button("删除");
@@ -333,9 +365,7 @@ public class WarehouseAdminController implements Initializable {
         userTableView.setItems(userList);
     }
 
-    /**
-     * 初始化库存记录表格
-     */
+    // ... (StockRecord Table Initialization) ...
     private void initializeStockRecordTable() {
         recordIdColumn.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().getRecordId()));
         recordTypeColumn.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().getType()));
@@ -348,7 +378,8 @@ public class WarehouseAdminController implements Initializable {
     }
 
     /**
-     * 更新产品下拉框
+     * 更新入库/出库表单中的下拉框选项。
+     * 格式: 商品名称 (ID)
      */
     private void updateProductCombos() {
         ObservableList<String> productNames = FXCollections.observableArrayList();
@@ -360,11 +391,12 @@ public class WarehouseAdminController implements Initializable {
     }
 
     /**
-     * 更新统计数据
+     * 更新顶部仪表盘的统计数据。
      */
     private void updateStatistics() {
         totalProductsText.setText(String.valueOf(productList.size()));
 
+        // 计算低库存商品：调用 Product 实体中的业务逻辑判断
         long lowStockCount = productList.stream()
                 .filter(Product::needsStockAlert)
                 .count();
@@ -374,13 +406,13 @@ public class WarehouseAdminController implements Initializable {
     }
 
     /**
-     * 生成批次号
+     * 生成基于时间戳的唯一批次号。
      */
     private String generateBatchNumber() {
         return "BATCH-" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"));
     }
 
-    // ==================== 菜单切换 ====================
+    // ==================== 菜单切换逻辑 (使用 visibility 控制 Pane) ====================
 
     @FXML
     void showProductManagement(ActionEvent event) {
@@ -390,6 +422,7 @@ public class WarehouseAdminController implements Initializable {
         reportPane.setVisible(false);
     }
 
+    // ... (其他切换方法略) ...
     @FXML
     void showStockManagement(ActionEvent event) {
         productPane.setVisible(false);
@@ -419,16 +452,20 @@ public class WarehouseAdminController implements Initializable {
 
     @FXML
     void handleAddProduct(ActionEvent event) {
-        showProductDialog(null);
+        showProductDialog(null); // null 表示添加模式
     }
 
     @FXML
     void handleEditProduct(Product product) {
         if (product == null)
             return;
-        showProductDialog(product);
+        showProductDialog(product); // 传入对象表示编辑模式
     }
 
+    /**
+     * 处理产品删除请求。
+     * 发送删除指令到服务器 -> 接收响应 -> 更新本地列表。
+     */
     @FXML
     void handleDeleteProduct(Product product) {
         if (product == null)
@@ -459,6 +496,10 @@ public class WarehouseAdminController implements Initializable {
         });
     }
 
+    /**
+     * 快速搜索功能。
+     * 根据输入框内容过滤 ID、名称或类别。
+     */
     @FXML
     void handleSearchProduct(ActionEvent event) {
         if (filteredProducts == null)
@@ -476,6 +517,9 @@ public class WarehouseAdminController implements Initializable {
         refreshProductFilter();
     }
 
+    /**
+     * 重置所有筛选条件并刷新数据。
+     */
     @FXML
     void handleRefreshProducts(ActionEvent event) {
         quickSearchPredicate = product -> true;
@@ -486,7 +530,10 @@ public class WarehouseAdminController implements Initializable {
     }
 
     /**
-     * 显示商品添加/编辑对话框
+     * 显示添加/编辑商品的弹窗。
+     * 这是一个较复杂的 Dialog，包含多个 TextField 和输入验证逻辑。
+     * 
+     * @param product 待编辑的商品，若为 null 则为添加模式。
      */
     private void showProductDialog(Product product) {
         Dialog<Product> dialog = new Dialog<>();
@@ -500,6 +547,7 @@ public class WarehouseAdminController implements Initializable {
         grid.setHgap(10);
         grid.setVgap(10);
 
+        // ... (构建 Dialog UI 控件的代码，省略部分重复的 TextField 设置) ...
         TextField productIdField = new TextField();
         productIdField.setPromptText("自动生成");
         productIdField.setEditable(false);
@@ -507,6 +555,7 @@ public class WarehouseAdminController implements Initializable {
             productIdField.setText(product.getProductId());
 
         TextField nameField = new TextField();
+        // ... (其他字段初始化: name, category, price, stock 等) ...
         nameField.setPromptText("商品名称");
         if (product != null)
             nameField.setText(product.getProductName());
@@ -517,50 +566,43 @@ public class WarehouseAdminController implements Initializable {
             categoryField.setText(product.getCategory());
 
         TextField specField = new TextField();
-        specField.setPromptText("规格型号");
         if (product != null)
             specField.setText(product.getSpecification());
 
         TextField unitField = new TextField();
-        unitField.setPromptText("单位");
         if (product != null)
             unitField.setText(product.getUnit());
 
         TextField priceField = new TextField();
-        priceField.setPromptText("采购价格");
         if (product != null)
             priceField.setText(String.valueOf(product.getPurchasePrice()));
 
         TextField sellingPriceField = new TextField();
-        sellingPriceField.setPromptText("销售价格");
         if (product != null)
             sellingPriceField.setText(String.valueOf(product.getSellingPrice()));
 
         TextField minStockField = new TextField();
-        minStockField.setPromptText("最小库存");
         if (product != null)
             minStockField.setText(String.valueOf(product.getMinStock()));
 
         TextField maxStockField = new TextField();
-        maxStockField.setPromptText("最大库存");
         if (product != null)
             maxStockField.setText(String.valueOf(product.getMaxStock()));
 
         TextField supplierField = new TextField();
-        supplierField.setPromptText("供应商");
         if (product != null)
             supplierField.setText(product.getSupplier());
 
         TextArea descArea = new TextArea();
-        descArea.setPromptText("商品描述");
-        descArea.setPrefRowCount(3);
         if (product != null)
             descArea.setText(product.getDescription());
 
+        // 布局添加到 Grid
         grid.add(new Label("商品编号:"), 0, 0);
         grid.add(productIdField, 1, 0);
         grid.add(new Label("商品名称:"), 0, 1);
         grid.add(nameField, 1, 1);
+        // ... (其他 grid.add) ...
         grid.add(new Label("商品类别:"), 0, 2);
         grid.add(categoryField, 1, 2);
         grid.add(new Label("规格型号:"), 0, 3);
@@ -582,9 +624,10 @@ public class WarehouseAdminController implements Initializable {
 
         dialog.getDialogPane().setContent(grid);
 
-        // 添加输入验证
+        // --- 输入验证逻辑 ---
         Button saveButton = (Button) dialog.getDialogPane().lookupButton(saveButtonType);
         saveButton.addEventFilter(ActionEvent.ACTION, event -> {
+            // 必填项校验
             String name = nameField.getText();
             String category = categoryField.getText();
             String unit = unitField.getText();
@@ -597,41 +640,30 @@ public class WarehouseAdminController implements Initializable {
                 return;
             }
 
+            // 数字格式校验
             try {
-                String priceText = priceField.getText();
-                String sellingPriceText = sellingPriceField.getText();
-                String minStockText = minStockField.getText();
-                String maxStockText = maxStockField.getText();
-
-                if (priceText == null || priceText.trim().isEmpty() ||
-                        sellingPriceText == null || sellingPriceText.trim().isEmpty() ||
-                        minStockText == null || minStockText.trim().isEmpty() ||
-                        maxStockText == null || maxStockText.trim().isEmpty()) {
-                    showAlert("错误", "价格和库存字段不能为空", Alert.AlertType.ERROR);
-                    event.consume();
-                    return;
-                }
-
-                Double.parseDouble(priceText.trim());
-                Double.parseDouble(sellingPriceText.trim());
-                Integer.parseInt(minStockText.trim());
-                Integer.parseInt(maxStockText.trim());
+                Double.parseDouble(priceField.getText().trim());
+                Double.parseDouble(sellingPriceField.getText().trim());
+                Integer.parseInt(minStockField.getText().trim());
+                Integer.parseInt(maxStockField.getText().trim());
             } catch (NumberFormatException e) {
-                showAlert("错误", "请输入有效的数字", Alert.AlertType.ERROR);
-                event.consume(); // 阻止对话框关闭
+                showAlert("错误", "价格和库存字段必须是有效的数字", Alert.AlertType.ERROR);
+                event.consume();
             }
         });
 
+        // 结果转换器：将输入转换为 Product 对象
         dialog.setResultConverter(dialogButton -> {
             if (dialogButton == saveButtonType) {
                 try {
                     Product p = product != null ? product : new Product();
                     if (product == null) {
                         p.setProductId("P" + System.currentTimeMillis());
-                        p.setCurrentStock(0);
+                        p.setCurrentStock(0); // 新商品默认库存为0
                     }
                     p.setProductName(getTextSafe(nameField));
                     p.setCategory(getTextSafe(categoryField));
+                    // ... 设置其他属性 ...
                     p.setSpecification(getTextSafe(specField));
                     p.setUnit(getTextSafe(unitField));
                     p.setPurchasePrice(Double.parseDouble(getTextSafe(priceField)));
@@ -642,13 +674,13 @@ public class WarehouseAdminController implements Initializable {
                     p.setDescription(descArea.getText() != null ? descArea.getText().trim() : "");
                     return p;
                 } catch (NumberFormatException e) {
-                    showAlert("错误", "请输入有效的数字", Alert.AlertType.ERROR);
                     return null;
                 }
             }
             return null;
         });
 
+        // 处理保存结果：发送网络请求
         dialog.showAndWait().ifPresent(p -> {
             if (p != null) {
                 new Thread(() -> {
@@ -658,6 +690,7 @@ public class WarehouseAdminController implements Initializable {
 
                     Platform.runLater(() -> {
                         if (msg.isSuccess()) {
+                            // 乐观更新 UI
                             if (product == null) {
                                 productList.add(p);
                             } else {
@@ -667,7 +700,7 @@ public class WarehouseAdminController implements Initializable {
                             }
                             showAlert("成功", product == null ? "商品添加成功" : "商品更新成功",
                                     Alert.AlertType.INFORMATION);
-                            loadDataFromServer();
+                            loadDataFromServer(); // 再次从服务器拉取以确保一致性
                         } else {
                             showAlert("失败", msg.getMessage(), Alert.AlertType.ERROR);
                         }
@@ -679,6 +712,9 @@ public class WarehouseAdminController implements Initializable {
 
     // ==================== 库存管理功能 ====================
 
+    /**
+     * 处理“手动入库”操作。
+     */
     @FXML
     void handleStockIn(ActionEvent event) {
         String productSelection = stockInProductCombo.getValue();
@@ -699,7 +735,7 @@ public class WarehouseAdminController implements Initializable {
                 return;
             }
 
-            // 提取产品ID
+            // 从 "Name (ID)" 格式中提取 ID
             String productId = productSelection.substring(productSelection.lastIndexOf("(") + 1,
                     productSelection.lastIndexOf(")"));
 
@@ -734,8 +770,12 @@ public class WarehouseAdminController implements Initializable {
         }
     }
 
+    /**
+     * 处理“手动出库”操作。
+     */
     @FXML
     void handleStockOut(ActionEvent event) {
+        // ... (逻辑与 handleStockIn 类似，构建 StockOutRecord 并发送) ...
         String productSelection = stockOutProductCombo.getValue();
         String quantityStr = stockOutQuantityField.getText().trim();
         String recipient = recipientField.getText().trim();
@@ -797,6 +837,7 @@ public class WarehouseAdminController implements Initializable {
         stockInRemarkArea.clear();
     }
 
+    // ... (handleClearStockOutForm) ...
     @FXML
     void handleClearStockOutForm(ActionEvent event) {
         stockOutProductCombo.setValue(null);
@@ -806,6 +847,9 @@ public class WarehouseAdminController implements Initializable {
         stockOutRemarkArea.clear();
     }
 
+    /**
+     * 刷新库存记录流水表。
+     */
     @FXML
     void handleRefreshStockRecords(ActionEvent event) {
         new Thread(() -> {
@@ -813,6 +857,7 @@ public class WarehouseAdminController implements Initializable {
                     new Message(Message.MessageType.STOCK_RECORD_LIST));
 
             if (msg.isSuccess()) {
+                // 处理服务器返回的 DTO 数据并转换为本地显示对象
                 List<?> rawList = (List<?>) msg.getData();
                 List<StockRecord> records = new ArrayList<>();
 
@@ -839,7 +884,11 @@ public class WarehouseAdminController implements Initializable {
     }
 
     /**
-     * 获取已被经理审批通过的采购订单，并可确认到货（将订单商品逐项入库）
+     * 核心业务逻辑：采购订单收货。
+     * 1. 获取所有状态为 "APPROVED" 的采购订单。
+     * 2. 展示订单及其明细。
+     * 3. 用户确认收货后，系统自动为每项商品创建“入库记录”。
+     * 4. 更新订单状态为 "COMPLETED/ARRIVED"。
      */
     @FXML
     void handleFetchApprovedOrders(ActionEvent event) {
@@ -865,14 +914,15 @@ public class WarehouseAdminController implements Initializable {
                 return;
             }
 
-            // 选择要确认到货的订单：使用双表对话框显示订单列表和明细
+            // --- 显示选择订单的对话框 ---
             Platform.runLater(() -> {
                 Dialog<ButtonType> dialog = new Dialog<>();
                 dialog.setTitle("已批准订单");
                 dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
 
-                // 左侧：订单表
+                // 左侧：订单列表
                 TableView<PurchaseOrder> ordersTable = new TableView<>();
+                // ... (创建订单表格列: ID, 采购员, 供应商, 金额) ...
                 TableColumn<PurchaseOrder, String> oidCol = new TableColumn<>("订单号");
                 oidCol.setCellValueFactory(d -> new SimpleStringProperty(d.getValue().getOrderId()));
                 TableColumn<PurchaseOrder, String> purchaserCol = new TableColumn<>("采购员");
@@ -888,8 +938,9 @@ public class WarehouseAdminController implements Initializable {
                 ordersTable.setItems(approvedObs);
                 ordersTable.getSelectionModel().selectFirst();
 
-                // 右侧：明细表
+                // 右侧：明细列表
                 TableView<PurchaseOrder.OrderItem> itemsTable = new TableView<>();
+                // ... (创建明细表格列: 名称, ID, 规格, 数量, 单价) ...
                 TableColumn<PurchaseOrder.OrderItem, String> itemNameCol = new TableColumn<>("商品名称");
                 itemNameCol.setCellValueFactory(c -> new SimpleStringProperty(c.getValue().getProductName()));
                 TableColumn<PurchaseOrder.OrderItem, String> itemIdCol = new TableColumn<>("商品ID");
@@ -904,7 +955,7 @@ public class WarehouseAdminController implements Initializable {
                         c -> new SimpleStringProperty(String.format("%.2f", c.getValue().getPrice())));
                 itemsTable.getColumns().addAll(itemNameCol, itemIdCol, itemSpecCol, itemQtyCol, itemPriceCol);
 
-                // 选中订单时更新明细
+                // 联动：选中订单显示对应明细
                 ordersTable.getSelectionModel().selectedItemProperty().addListener((obs, oldV, newV) -> {
                     if (newV != null) {
                         itemsTable.setItems(FXCollections.observableArrayList(newV.getItems()));
@@ -913,7 +964,7 @@ public class WarehouseAdminController implements Initializable {
                     }
                 });
 
-                // 初始显示第一个订单的明细
+                // 初始化显示第一个订单的明细
                 if (!approvedObs.isEmpty()) {
                     itemsTable.setItems(FXCollections.observableArrayList(approvedObs.get(0).getItems()));
                 }
@@ -922,14 +973,15 @@ public class WarehouseAdminController implements Initializable {
                 content.setPrefSize(900, 400);
                 dialog.getDialogPane().setContent(content);
 
+                // --- 处理确认收货 ---
                 dialog.showAndWait().ifPresent(bt -> {
                     if (bt == ButtonType.OK) {
                         PurchaseOrder selected = ordersTable.getSelectionModel().getSelectedItem();
                         if (selected == null)
                             return;
 
-                        // 确认到货并为每项创建入库记录
                         new Thread(() -> {
+                            // 1. 为每个明细项创建入库记录
                             for (PurchaseOrder.OrderItem item : selected.getItems()) {
                                 StockInRecord in = new StockInRecord();
                                 in.setRecordId("IN-" + System.currentTimeMillis() + "-" + item.getProductId());
@@ -947,13 +999,15 @@ public class WarehouseAdminController implements Initializable {
                                 if (!inMsg.isSuccess()) {
                                     final String err = inMsg.getMessage();
                                     Platform.runLater(() -> showAlert("错误", "入库失败: " + err, Alert.AlertType.ERROR));
-                                    return;
+                                    return; // 中断流程
                                 }
                             }
 
+                            // 2. 发送确认到货消息，更新订单状态
                             Message confirmMsg = socketClient.sendAndReceive(
                                     new Message(Message.MessageType.PURCHASE_ORDER_ARRIVAL_CONFIRM,
                                             selected.getOrderId()));
+
                             if (confirmMsg.isSuccess()) {
                                 Platform.runLater(() -> {
                                     showAlert("成功", "已确认到货并更新库存", Alert.AlertType.INFORMATION);
@@ -970,9 +1024,7 @@ public class WarehouseAdminController implements Initializable {
         }).start();
     }
 
-    /**
-     * 查看并导出操作日志
-     */
+    // ... (View Logs Logic) ...
     @FXML
     void handleViewLogs(ActionEvent event) {
         new Thread(() -> {
@@ -1004,7 +1056,7 @@ public class WarehouseAdminController implements Initializable {
                 area.setPrefHeight(600);
                 dialog.getDialogPane().setContent(area);
 
-                // 添加导出按钮
+                // 导出 CSV 功能
                 ButtonType exportType = new ButtonType("导出CSV", ButtonBar.ButtonData.OTHER);
                 dialog.getDialogPane().getButtonTypes().add(exportType);
 
@@ -1033,24 +1085,193 @@ public class WarehouseAdminController implements Initializable {
         }).start();
     }
 
-    // ==================== 用户管理功能 ====================
+    // ==================== 用户管理功能 (仅管理员) ====================
 
     @FXML
     void handleAddUser(ActionEvent event) {
-        showAlert("提示", "添加用户功能开发中", Alert.AlertType.INFORMATION);
+        // ... (构建用户添加 Dialog 的 UI 代码，包含 roleCombo 映射 UserRole 枚举) ...
+        Dialog<User> dialog = new Dialog<>();
+        dialog.setTitle("添加用户");
+        dialog.setHeaderText("请填写新用户信息");
+        ButtonType confirmButtonType = new ButtonType("确定", ButtonBar.ButtonData.OK_DONE);
+        dialog.getDialogPane().getButtonTypes().addAll(confirmButtonType, ButtonType.CANCEL);
+
+        GridPane grid = new GridPane();
+        grid.setHgap(10);
+        grid.setVgap(10);
+
+        TextField userIdField = new TextField();
+        userIdField.setPromptText("用户ID（如：U005）");
+        TextField usernameField = new TextField();
+        usernameField.setPromptText("用户名");
+        PasswordField passwordField = new PasswordField();
+        passwordField.setPromptText("密码");
+        TextField realNameField = new TextField();
+        realNameField.setPromptText("真实姓名");
+        ComboBox<String> roleCombo = new ComboBox<>();
+        roleCombo.setItems(FXCollections.observableArrayList("仓库管理员", "采购员", "部门经理", "总经理"));
+        roleCombo.setValue("采购员");
+
+        grid.add(new Label("用户ID:"), 0, 0);
+        grid.add(userIdField, 1, 0);
+        grid.add(new Label("用户名:"), 0, 1);
+        grid.add(usernameField, 1, 1);
+        grid.add(new Label("密码:"), 0, 2);
+        grid.add(passwordField, 1, 2);
+        grid.add(new Label("真实姓名:"), 0, 3);
+        grid.add(realNameField, 1, 3);
+        grid.add(new Label("角色:"), 0, 4);
+        grid.add(roleCombo, 1, 4);
+
+        dialog.getDialogPane().setContent(grid);
+
+        dialog.setResultConverter(dialogButton -> {
+            if (dialogButton == confirmButtonType) {
+                // ... (获取输入并进行非空校验) ...
+                String userId = userIdField.getText().trim();
+                String username = usernameField.getText().trim();
+                String password = passwordField.getText().trim();
+                String realName = realNameField.getText().trim();
+                String roleStr = roleCombo.getValue();
+
+                if (userId.isEmpty() || username.isEmpty() || password.isEmpty() || realName.isEmpty()
+                        || roleStr == null) {
+                    Platform.runLater(() -> showAlert("错误", "所有字段都必须填写", Alert.AlertType.ERROR));
+                    return null;
+                }
+
+                User.UserRole role = switch (roleStr) {
+                    case "仓库管理员" -> User.UserRole.WAREHOUSE_ADMIN;
+                    case "采购员" -> User.UserRole.PURCHASER;
+                    case "部门经理" -> User.UserRole.DEPARTMENT_MANAGER;
+                    case "总经理" -> User.UserRole.GENERAL_MANAGER;
+                    default -> User.UserRole.PURCHASER;
+                };
+
+                User newUser = new User(userId, username, password, realName, role);
+                newUser.setActive(true);
+                return newUser;
+            }
+            return null;
+        });
+
+        dialog.showAndWait().ifPresent(user -> {
+            new Thread(() -> {
+                Map<String, Object> data = new HashMap<>();
+                data.put("user", user);
+                Message msg = socketClient.sendAndReceive(new Message(Message.MessageType.USER_ADD, data));
+
+                Platform.runLater(() -> {
+                    if (msg.isSuccess()) {
+                        loadDataFromServer();
+                        showAlert("成功", "用户添加成功", Alert.AlertType.INFORMATION);
+                        updateStatistics();
+                    } else {
+                        showAlert("失败", msg.getMessage(), Alert.AlertType.ERROR);
+                    }
+                });
+            }).start();
+        });
     }
 
+    // ... (handleEditUser and handleDeleteUser Logic) ...
     @FXML
     void handleEditUser(User user) {
         if (user == null)
             return;
-        showAlert("提示", "编辑用户功能开发中", Alert.AlertType.INFORMATION);
+        // ... (类似 handleAddUser，但 userId 不可编辑，密码可留空) ...
+        Dialog<User> dialog = new Dialog<>();
+        dialog.setTitle("编辑用户");
+        dialog.setHeaderText("编辑用户信息: " + user.getUsername());
+        ButtonType confirmButtonType = new ButtonType("确定", ButtonBar.ButtonData.OK_DONE);
+        dialog.getDialogPane().getButtonTypes().addAll(confirmButtonType, ButtonType.CANCEL);
+
+        GridPane grid = new GridPane();
+        grid.setHgap(10);
+        grid.setVgap(10);
+
+        TextField userIdField = new TextField(user.getUserId());
+        userIdField.setDisable(true);
+        TextField usernameField = new TextField(user.getUsername());
+        PasswordField passwordField = new PasswordField();
+        passwordField.setPromptText("留空则不修改密码");
+        TextField realNameField = new TextField(user.getRealName());
+        ComboBox<String> roleCombo = new ComboBox<>();
+        roleCombo.setItems(FXCollections.observableArrayList("仓库管理员", "采购员", "部门经理", "总经理"));
+        roleCombo.setValue(user.getRole().getDisplayName());
+
+        grid.add(new Label("用户ID:"), 0, 0);
+        grid.add(userIdField, 1, 0);
+        grid.add(new Label("用户名:"), 0, 1);
+        grid.add(usernameField, 1, 1);
+        grid.add(new Label("新密码:"), 0, 2);
+        grid.add(passwordField, 1, 2);
+        grid.add(new Label("真实姓名:"), 0, 3);
+        grid.add(realNameField, 1, 3);
+        grid.add(new Label("角色:"), 0, 4);
+        grid.add(roleCombo, 1, 4);
+
+        dialog.getDialogPane().setContent(grid);
+
+        dialog.setResultConverter(dialogButton -> {
+            if (dialogButton == confirmButtonType) {
+                String username = usernameField.getText().trim();
+                String password = passwordField.getText().trim();
+                String realName = realNameField.getText().trim();
+                String roleStr = roleCombo.getValue();
+
+                if (username.isEmpty() || realName.isEmpty() || roleStr == null) {
+                    Platform.runLater(() -> showAlert("错误", "用户名、真实姓名和角色不能为空", Alert.AlertType.ERROR));
+                    return null;
+                }
+
+                User.UserRole role = switch (roleStr) {
+                    case "仓库管理员" -> User.UserRole.WAREHOUSE_ADMIN;
+                    case "采购员" -> User.UserRole.PURCHASER;
+                    case "部门经理" -> User.UserRole.DEPARTMENT_MANAGER;
+                    case "总经理" -> User.UserRole.GENERAL_MANAGER;
+                    default -> user.getRole();
+                };
+
+                // 若密码框为空，则保留原密码
+                User updatedUser = new User(user.getUserId(), username,
+                        password.isEmpty() ? user.getPassword() : password, realName, role);
+                updatedUser.setActive(user.isActive());
+                return updatedUser;
+            }
+            return null;
+        });
+
+        dialog.showAndWait().ifPresent(updatedUser -> {
+            new Thread(() -> {
+                Map<String, Object> data = new HashMap<>();
+                data.put("user", updatedUser);
+                Message msg = socketClient.sendAndReceive(new Message(Message.MessageType.USER_UPDATE, data));
+                Platform.runLater(() -> {
+                    if (msg.isSuccess()) {
+                        loadDataFromServer();
+                        showAlert("成功", "用户信息更新成功", Alert.AlertType.INFORMATION);
+                    } else {
+                        showAlert("失败", msg.getMessage(), Alert.AlertType.ERROR);
+                    }
+                });
+            }).start();
+        });
     }
 
     @FXML
     void handleDeleteUser(User user) {
         if (user == null)
             return;
+        // 保护机制：禁止删除自己和其他管理员
+        if (currentUser != null && user.getUserId().equals(currentUser.getUserId())) {
+            showAlert("错误", "不能删除当前登录的用户", Alert.AlertType.ERROR);
+            return;
+        }
+        if (user.getRole() == User.UserRole.WAREHOUSE_ADMIN) {
+            showAlert("错误", "不能删除其他仓库管理员", Alert.AlertType.ERROR);
+            return;
+        }
 
         Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
         confirm.setTitle("确认删除");
@@ -1062,7 +1283,6 @@ public class WarehouseAdminController implements Initializable {
                 new Thread(() -> {
                     Message msg = socketClient.sendAndReceive(
                             new Message(Message.MessageType.USER_DELETE, user.getUserId()));
-
                     Platform.runLater(() -> {
                         if (msg.isSuccess()) {
                             userList.remove(user);
@@ -1077,8 +1297,7 @@ public class WarehouseAdminController implements Initializable {
         });
     }
 
-    // ==================== 报表功能 ====================
-
+    // ==================== 报表导出功能 (Placeholder) ====================
     @FXML
     void handleExportReport(ActionEvent event) {
         FileChooser fileChooser = new FileChooser();
@@ -1094,8 +1313,7 @@ public class WarehouseAdminController implements Initializable {
         }
     }
 
-    // ==================== 通用功能 ====================
-
+    // ==================== 退出系统 ====================
     @FXML
     void handleLogout(ActionEvent event) {
         Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
@@ -1139,7 +1357,7 @@ public class WarehouseAdminController implements Initializable {
         alert.showAndWait();
     }
 
-    // 内部类：库存记录（用于显示）
+    // 内部类：库存记录视图模型
     public static class StockRecord {
         private String recordId;
         private String type;
@@ -1149,7 +1367,7 @@ public class WarehouseAdminController implements Initializable {
         private String time;
         private String remark;
 
-        // Getters and Setters
+        // Getters and Setters ...
         public String getRecordId() {
             return recordId;
         }
@@ -1210,14 +1428,14 @@ public class WarehouseAdminController implements Initializable {
     // ==================== 高级筛选功能 ====================
 
     /**
-     * 高级筛选功能：按类别和库存范围筛选
+     * 高级筛选：弹窗允许用户按类别、库存范围、是否低库存等条件组合筛选。
+     * 更新 advancedProductPredicate 并触发 refreshProductFilter()。
      */
     @FXML
     void handleAdvancedFilter(ActionEvent event) {
         Dialog<ButtonType> dialog = new Dialog<>();
         dialog.setTitle("高级筛选");
         dialog.setHeaderText("按条件筛选商品");
-
         ButtonType filterButtonType = new ButtonType("筛选", ButtonBar.ButtonData.OK_DONE);
         dialog.getDialogPane().getButtonTypes().addAll(filterButtonType, ButtonType.CANCEL);
 
@@ -1238,10 +1456,8 @@ public class WarehouseAdminController implements Initializable {
 
         TextField minStockField = new TextField();
         minStockField.setPromptText("最小库存下限");
-
         TextField maxStockField = new TextField();
         maxStockField.setPromptText("最大库存上限");
-
         CheckBox lowStockOnly = new CheckBox("仅显示低库存商品");
         CheckBox overStockOnly = new CheckBox("仅显示超库存商品");
 
@@ -1258,54 +1474,39 @@ public class WarehouseAdminController implements Initializable {
 
         dialog.showAndWait().ifPresent(response -> {
             if (response == filterButtonType) {
+                // 解析筛选条件
                 String category = categoryCombo.getValue();
-                String minStr = minStockField.getText().trim();
-                String maxStr = maxStockField.getText().trim();
-
-                Integer minValue = null;
-                Integer maxValue = null;
+                Integer minValue = null, maxValue = null;
                 try {
-                    if (!minStr.isEmpty()) {
-                        minValue = Integer.parseInt(minStr);
-                    }
+                    if (!minStockField.getText().trim().isEmpty())
+                        minValue = Integer.parseInt(minStockField.getText().trim());
+                    if (!maxStockField.getText().trim().isEmpty())
+                        maxValue = Integer.parseInt(maxStockField.getText().trim());
                 } catch (NumberFormatException ignored) {
                 }
 
-                try {
-                    if (!maxStr.isEmpty()) {
-                        maxValue = Integer.parseInt(maxStr);
-                    }
-                } catch (NumberFormatException ignored) {
-                }
-
+                // Capture variables for lambda
                 final Integer minThreshold = minValue;
                 final Integer maxThreshold = maxValue;
                 final boolean lowStock = lowStockOnly.isSelected();
                 final boolean overStock = overStockOnly.isSelected();
                 final String selectedCategory = category;
 
+                // 构建 Predicate
                 advancedProductPredicate = product -> {
                     if (product == null)
                         return false;
-
-                    if (!"全部类别".equals(selectedCategory)) {
-                        if (product.getCategory() == null || !product.getCategory().equals(selectedCategory)) {
-                            return false;
-                        }
-                    }
-
-                    if (minThreshold != null && product.getCurrentStock() < minThreshold) {
+                    if (!"全部类别".equals(selectedCategory) &&
+                            (product.getCategory() == null || !product.getCategory().equals(selectedCategory)))
                         return false;
-                    }
-                    if (maxThreshold != null && product.getCurrentStock() > maxThreshold) {
+                    if (minThreshold != null && product.getCurrentStock() < minThreshold)
                         return false;
-                    }
-                    if (lowStock && !product.needsStockAlert()) {
+                    if (maxThreshold != null && product.getCurrentStock() > maxThreshold)
                         return false;
-                    }
-                    if (overStock && !product.isOverStock()) {
+                    if (lowStock && !product.needsStockAlert())
                         return false;
-                    }
+                    if (overStock && !product.isOverStock())
+                        return false;
                     return true;
                 };
 
@@ -1316,17 +1517,17 @@ public class WarehouseAdminController implements Initializable {
         });
     }
 
-    // ==================== 库存调整功能 ====================
+    // ==================== 库存调整功能 (盘点) ====================
 
     /**
-     * 库存调整功能：盘点和修正
+     * 处理库存盘点与修正。
+     * 用户输入实际盘点数量，系统计算差异并提交 STOCK_ADJUSTMENT 记录。
      */
     @FXML
     void handleStockAdjustment(ActionEvent event) {
         Dialog<ButtonType> dialog = new Dialog<>();
         dialog.setTitle("库存调整");
         dialog.setHeaderText("库存盘点与调整");
-
         ButtonType adjustButtonType = new ButtonType("调整", ButtonBar.ButtonData.OK_DONE);
         dialog.getDialogPane().getButtonTypes().addAll(adjustButtonType, ButtonType.CANCEL);
 
@@ -1335,56 +1536,45 @@ public class WarehouseAdminController implements Initializable {
         grid.setVgap(10);
 
         ComboBox<String> productCombo = new ComboBox<>();
-        productList.forEach(p -> {
-            productCombo.getItems().add(p.getProductName() + " (" + p.getProductId() + ")");
-        });
+        productList.forEach(p -> productCombo.getItems().add(p.getProductName() + " (" + p.getProductId() + ")"));
 
         Label currentStockLabel = new Label("当前库存: --");
         TextField actualStockField = new TextField();
         actualStockField.setPromptText("实际盘点数量");
-
         Label differenceLabel = new Label("差异: --");
-
         ComboBox<String> reasonCombo = new ComboBox<>();
         reasonCombo.getItems().addAll("盘点调整", "损耗", "盘盈", "系统错误修正", "其他");
         reasonCombo.setValue("盘点调整");
-
         TextArea remarkArea = new TextArea();
         remarkArea.setPromptText("调整原因说明");
         remarkArea.setPrefRowCount(3);
 
-        // 选择商品时更新当前库存
+        // 逻辑：选择商品后更新当前库存显示
         productCombo.setOnAction(e -> {
             String selection = productCombo.getValue();
             if (selection != null) {
-                String productId = selection.substring(selection.lastIndexOf("(") + 1,
-                        selection.lastIndexOf(")"));
-                productList.stream()
-                        .filter(p -> p.getProductId().equals(productId))
-                        .findFirst()
+                String productId = selection.substring(selection.lastIndexOf("(") + 1, selection.lastIndexOf(")"));
+                productList.stream().filter(p -> p.getProductId().equals(productId)).findFirst()
                         .ifPresent(p -> {
-                            currentStockLabel.setText("当前库存: " + p.getCurrentStock() + " " +
-                                    (p.getUnit() != null ? p.getUnit() : ""));
+                            currentStockLabel.setText(
+                                    "当前库存: " + p.getCurrentStock() + " " + (p.getUnit() != null ? p.getUnit() : ""));
                             actualStockField.setText(String.valueOf(p.getCurrentStock()));
                         });
             }
         });
 
-        // 输入实际数量时计算差异
+        // 逻辑：输入实际数量时实时计算差异
         actualStockField.textProperty().addListener((obs, old, newVal) -> {
             String selection = productCombo.getValue();
             if (selection != null && !newVal.trim().isEmpty()) {
                 try {
                     int actualStock = Integer.parseInt(newVal.trim());
-                    String productId = selection.substring(selection.lastIndexOf("(") + 1,
-                            selection.lastIndexOf(")"));
-                    productList.stream()
-                            .filter(p -> p.getProductId().equals(productId))
-                            .findFirst()
+                    String productId = selection.substring(selection.lastIndexOf("(") + 1, selection.lastIndexOf(")"));
+                    productList.stream().filter(p -> p.getProductId().equals(productId)).findFirst()
                             .ifPresent(p -> {
                                 int difference = actualStock - p.getCurrentStock();
-                                differenceLabel.setText("差异: " + (difference >= 0 ? "+" : "") +
-                                        difference + " " + (p.getUnit() != null ? p.getUnit() : ""));
+                                differenceLabel.setText("差异: " + (difference >= 0 ? "+" : "") + difference + " "
+                                        + (p.getUnit() != null ? p.getUnit() : ""));
                                 differenceLabel.setStyle(difference == 0 ? ""
                                         : (difference > 0 ? "-fx-text-fill: green;" : "-fx-text-fill: red;"));
                             });
@@ -1404,7 +1594,6 @@ public class WarehouseAdminController implements Initializable {
         grid.add(reasonCombo, 1, 4);
         grid.add(new Label("详细说明:"), 0, 5);
         grid.add(remarkArea, 1, 5);
-
         dialog.getDialogPane().setContent(grid);
 
         dialog.showAndWait().ifPresent(response -> {
@@ -1419,27 +1608,19 @@ public class WarehouseAdminController implements Initializable {
 
                 try {
                     int actualStock = Integer.parseInt(actualStockStr);
-                    String productId = selection.substring(selection.lastIndexOf("(") + 1,
-                            selection.lastIndexOf(")"));
-
-                    Product product = productList.stream()
-                            .filter(p -> p.getProductId().equals(productId))
-                            .findFirst()
+                    String productId = selection.substring(selection.lastIndexOf("(") + 1, selection.lastIndexOf(")"));
+                    Product product = productList.stream().filter(p -> p.getProductId().equals(productId)).findFirst()
                             .orElse(null);
 
-                    if (product == null) {
-                        showAlert("错误", "未找到选中的商品", Alert.AlertType.ERROR);
+                    if (product == null)
                         return;
-                    }
-
                     int difference = actualStock - product.getCurrentStock();
-
                     if (difference == 0) {
                         showAlert("提示", "库存数量无变化，无需调整", Alert.AlertType.INFORMATION);
                         return;
                     }
 
-                    // 创建调整记录
+                    // 构建调整数据包
                     Map<String, Object> adjustmentData = new HashMap<>();
                     adjustmentData.put("productId", productId);
                     adjustmentData.put("oldStock", product.getCurrentStock());
@@ -1452,18 +1633,11 @@ public class WarehouseAdminController implements Initializable {
                     adjustmentData.put("timestamp", LocalDateTime.now());
 
                     new Thread(() -> {
-                        Message msg = socketClient.sendAndReceive(
-                                new Message(Message.MessageType.STOCK_ADJUSTMENT, adjustmentData));
-
+                        Message msg = socketClient
+                                .sendAndReceive(new Message(Message.MessageType.STOCK_ADJUSTMENT, adjustmentData));
                         Platform.runLater(() -> {
                             if (msg.isSuccess()) {
-                                showAlert("成功",
-                                        "库存调整成功\n" +
-                                                "商品: " + product.getProductName() + "\n" +
-                                                "原库存: " + product.getCurrentStock() + "\n" +
-                                                "新库存: " + actualStock + "\n" +
-                                                "差异: " + (difference >= 0 ? "+" : "") + difference,
-                                        Alert.AlertType.INFORMATION);
+                                showAlert("成功", "库存调整成功", Alert.AlertType.INFORMATION);
                                 loadDataFromServer();
                             } else {
                                 showAlert("失败", msg.getMessage(), Alert.AlertType.ERROR);
@@ -1478,9 +1652,6 @@ public class WarehouseAdminController implements Initializable {
         });
     }
 
-    /**
-     * 安全获取TextField的文本值，避免NullPointerException
-     */
     private String getTextSafe(TextField field) {
         String text = field.getText();
         return text != null ? text.trim() : "";

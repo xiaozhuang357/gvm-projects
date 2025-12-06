@@ -15,17 +15,90 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
- * WMS服务器端 - 处理所有客户端连接和业务逻辑
+ * WMS服务器端核心类 - 处理所有客户端连接和业务逻辑
+ * <p>
+ * 功能说明:
+ * 1. 多线程服务器，支持并发处理多个客户端连接
+ * 2. 使用线程池(CachedThreadPool)管理客户端处理线程
+ * 3. 维护所有活跃客户端连接的Map(线程安全的ConcurrentHashMap)
+ * 4. 集成DataService处理所有数据库操作
+ * 5. 支持从config.ini配置文件读取端口号
+ * 6. 启动时自动初始化示例数据(用户、商品等)
+ * <p>
+ * 架构设计:
+ * - 主线程:负责监听端口,接受新的客户端连接
+ * - 工作线程:每个客户端由独立的ClientHandler线程处理
+ * - 线程池:动态创建和回收工作线程,避免资源浪费
+ * - 消息驱动:通过Message对象的MessageType路由到不同的业务处理方法
+ * <p>
+ * 支持的业务功能:
+ * - 用户认证:登录/登出
+ * - 用户管理:增删改查用户信息
+ * - 商品管理:增删改查商品信息,库存预警
+ * - 采购管理:创建/审批/退回采购订单
+ * - 库存管理:入库/出库/库存调整
+ * - 日志查询:操作日志记录和查询
+ * <p>
+ * 使用示例:
+ * 
+ * <pre>
+ * // 启动服务器(使用默认端口8888)
+ * WMSServer server = new WMSServer();
+ * server.start(); // 阻塞主线程
+ * 
+ * // 或使用自定义端口
+ * WMSServer server = new WMSServer(9999);
+ * server.start();
+ * 
+ * // 优雅关闭
+ * Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+ *     server.stop();
+ * }));
+ * </pre>
+ * <p>
+ * 配置要求:
+ * config.ini中需包含:
+ * [Server]
+ * Port=8888 # 服务器端口号
+ * <p>
+ * 注意事项:
+ * - start()方法会阻塞调用线程,应在独立线程或main方法中调用
+ * - 客户端断开连接会自动清理资源(关闭流和socket)
+ * - 使用volatile保证running标志的多线程可见性
+ * - 所有数据操作通过DataService进行,确保事务一致性
+ *
+ * @author WMS开发团队
+ * @version 1.0
+ * @since 2025-12-06
  */
 public class WMSServer {
+    /** 默认服务器端口 */
     private static final int DEFAULT_PORT = 8888;
+
+    /** 服务器监听端口(从配置文件读取) */
     private final int port;
+
+    /** 服务器Socket,用于监听客户端连接 */
     private ServerSocket serverSocket;
+
+    /** 线程池,用于管理ClientHandler工作线程 */
     private ExecutorService threadPool;
+
+    /** 所有活跃客户端连接的Map,key为用户ID */
     private Map<String, ClientHandler> connectedClients;
+
+    /** 数据服务层,封装所有数据库操作 */
     private DataService dataService;
+
+    /** 服务器运行状态标志,volatile保证多线程可见性 */
     private volatile boolean running;
 
+    /**
+     * 默认构造函数
+     * <p>
+     * 从config.ini配置文件读取端口号,如果读取失败则使用默认端口8888
+     * 初始化线程池、客户端连接Map和数据服务层
+     */
     public WMSServer() {
         this.threadPool = Executors.newCachedThreadPool();
         this.connectedClients = new ConcurrentHashMap<>();
@@ -37,8 +110,10 @@ public class WMSServer {
 
     /**
      * 使用指定端口创建服务器
+     * <p>
+     * 使用场景:测试或需要动态指定端口的环境
      * 
-     * @param port 服务器端口
+     * @param port 服务器监听端口(1-65535)
      */
     public WMSServer(int port) {
         this.threadPool = Executors.newCachedThreadPool();
@@ -49,7 +124,20 @@ public class WMSServer {
     }
 
     /**
-     * 启动服务器
+     * 启动服务器(阻塞方法)
+     * <p>
+     * 执行步骤:
+     * 1. 创建ServerSocket并绑定到指定端口
+     * 2. 调用initializeData()初始化示例数据
+     * 3. 进入主循环,等待客户端连接
+     * 4. 每接受一个新连接,创建ClientHandler并提交到线程池
+     * 5. 继续等待下一个客户端连接
+     * <p>
+     * 注意事项:
+     * - 该方法会阻塞调用线程,直到服务器停止或发生异常
+     * - 初始化数据时会检查数据是否已存在,避免重复插入
+     * - 主循环中的异常会导致服务器退出
+     * - 建议使用ShutdownHook确保服务器优雅关闭
      */
     public void start() {
         try {
@@ -83,7 +171,16 @@ public class WMSServer {
     }
 
     /**
-     * 停止服务器
+     * 停止服务器(优雅关闭)
+     * <p>
+     * 执行步骤:
+     * 1. 设置running=false,使主循环退出
+     * 2. 关闭ServerSocket,不再接受新连接
+     * 3. 关闭线程池,中断所有ClientHandler线程
+     * <p>
+     * 注意事项:
+     * - 已建立的客户端连接会被强制关闭
+     * - 建议在JVM关闭时调用(ShutdownHook)
      */
     public void stop() {
         running = false;
@@ -100,7 +197,22 @@ public class WMSServer {
 
     /**
      * 初始化示例数据
-     * 仅在数据不存在时插入，避免重复插入导致主键冲突
+     * <p>
+     * 仅在数据不存在时插入,避免重复插入导致主键冲突
+     * <p>
+     * 初始化的示例数据包括:
+     * - U001: admin1 (系统管理员, WAREHOUSE_ADMIN)
+     * - U002: manager1 (部门经理, DEPARTMENT_MANAGER)
+     * - U003: general (总经理, GENERAL_MANAGER)
+     * - U004: purchaser (采购员, PURCHASER)
+     * - P001: 联想笔记本电脑 (电子产品, 5500元)
+     * - P002: 办公打印纸 (办公用品, 25元)
+     * - P003: 矿泉水 (食品饮料, 2.5元)
+     * <p>
+     * 注意事项:
+     * - 每个对象插入前都会通过ID检查是否已存在
+     * - 所有用户默认状态为活跃(active=true)
+     * - 商品初始化包含库存预警阈值设置
      */
     private void initializeData() {
 
@@ -164,8 +276,35 @@ public class WMSServer {
     }
 
     /**
-     * 客户端处理器线程
-     * 负责维护与单个客户端的长连接，处理请求并发送响应
+     * 客户端处理器线程 - 维护单个客户端连接的生命周期
+     * <p>
+     * 功能职责:
+     * 1. 与客户端建立并维护长连接
+     * 2. 循环读取客户端发送的Message对象
+     * 3. 根据MessageType路由到对应的业务处理方法
+     * 4. 将处理结果封装为Message并返回给客户端
+     * 5. 客户端断开连接时自动清理资源
+     * <p>
+     * 线程生命周期:
+     * 1. run()方法启动,创建ObjectInputStream/ObjectOutputStream
+     * 2. 循环等待客户端消息(readObject)
+     * 3. 收到消息后调用handleMessage()处理
+     * 4. 将响应消息写回客户端(writeObject)
+     * 5. 客户端断开或异常时退出循环
+     * 6. 执行finally块,关闭流和socket
+     * <p>
+     * 支持的消息类型:
+     * - 认证: LOGIN_REQUEST, LOGOUT
+     * - 用户: USER_ADD, USER_UPDATE, USER_DELETE, USER_LIST
+     * - 商品: PRODUCT_ADD, PRODUCT_UPDATE, PRODUCT_DELETE, PRODUCT_LIST
+     * - 采购: PURCHASE_ORDER_*, 包括CRUD和审批操作
+     * - 库存: STOCK_IN, STOCK_OUT, STOCK_ADJUSTMENT
+     * - 日志: LOG_LIST
+     * <p>
+     * 注意事项:
+     * - 每个客户端连接对应一个ClientHandler实例
+     * - 使用connectedClients Map跟踪所有活跃连接
+     * - 线程退出时会自动从connectedClients中移除
      */
     private class ClientHandler implements Runnable {
         private Socket socket;
@@ -235,6 +374,9 @@ public class WMSServer {
                         break;
                     case USER_ADD:
                         response = handleUserAdd(message);
+                        break;
+                    case USER_UPDATE:
+                        response = handleUserUpdate(message);
                         break;
                     case USER_DELETE:
                         response = handleUserDelete(message);
@@ -367,8 +509,10 @@ public class WMSServer {
         /**
          * 处理用户添加
          */
+        @SuppressWarnings("unchecked")
         private Message handleUserAdd(Message message) {
-            User user = (User) message.getData();
+            Map<String, Object> data = (Map<String, Object>) message.getData();
+            User user = (User) data.get("user");
             dataService.addUser(user);
             dataService.addLog(new OperationLog(currentUser.getUserId(), currentUser.getUsername(),
                     "创建", "用户管理", "添加用户: " + user.getUsername()));
@@ -376,18 +520,30 @@ public class WMSServer {
         }
 
         /**
+         * 处理用户更新
+         */
+        @SuppressWarnings("unchecked")
+        private Message handleUserUpdate(Message message) {
+            Map<String, Object> data = (Map<String, Object>) message.getData();
+            User updatedUser = (User) data.get("user");
+
+            // 使用 DataService 更新用户
+            dataService.updateUser(updatedUser);
+            dataService.addLog(new OperationLog(currentUser.getUserId(), currentUser.getUsername(),
+                    "更新", "用户管理", "更新用户: " + updatedUser.getUsername()));
+            return Message.success(Message.MessageType.USER_UPDATE, updatedUser, "用户更新成功");
+        }
+
+        /**
          * 处理用户删除
          */
         private Message handleUserDelete(Message message) {
             String userIdToDelete = (String) message.getData();
-            List<User> users = dataService.getAllUsers();
-            User userToDelete = users.stream()
-                    .filter(u -> u.getUserId().equals(userIdToDelete))
-                    .findFirst()
-                    .orElse(null);
+            User userToDelete = dataService.getUserById(userIdToDelete);
 
             if (userToDelete != null) {
-                users.remove(userToDelete);
+                // 使用 DataService 删除用户
+                dataService.deleteUser(userIdToDelete);
                 dataService.addLog(new OperationLog(currentUser.getUserId(), currentUser.getUsername(),
                         "删除", "用户管理", "删除用户: " + userToDelete.getUsername()));
                 return Message.success(Message.MessageType.USER_DELETE, null, "用户删除成功");

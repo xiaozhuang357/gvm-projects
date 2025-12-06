@@ -13,19 +13,69 @@ import java.util.Optional;
 
 /**
  * 配置管理器 - 单例模式
- * 支持INI格式配置文件解析
+ * <p>
+ * 功能说明：
+ * 1. 解析INI格式的配置文件（config.ini）
+ * 2. 支持多个配置节（Section），如[Mysql]、[Server]等
+ * 3. 提供类型安全的配置值获取方法（字符串、整数等）
+ * 4. 自动加载数据库配置并初始化DatabaseConfig对象
+ * 5. 支持从文件系统或classpath加载配置
+ * <p>
+ * INI文件格式示例：
+ * 
+ * <pre>
+ * [Mysql]
+ * Url=jdbc:mysql://127.0.0.1:3306/
+ * User=root
+ * Passwd=123456
+ * Schema=wms_db
+ * PoolSize=10
+ *
+ * [Server]
+ * Host=localhost
+ * Port=8888
+ * </pre>
+ * <p>
+ * 使用方式：
+ * 
+ * <pre>
+ * ConfigManager config = ConfigManager.getInstance();
+ * String host = config.getValue("Server", "Host", "localhost");
+ * int port = config.getIntValue("Server", "Port", 8888);
+ * DatabaseConfig dbConfig = config.getDatabaseConfig();
+ * </pre>
+ * <p>
+ * 线程安全：使用双重检查锁定（DCL）实现单例模式，确保多线程环境下安全
+ *
+ * @author WMS开发团队
+ * @version 1.0
+ * @since 2025-12-06
  */
 public class ConfigManager {
+    /** 单例实例，使用volatile保证可见性 */
     private static volatile ConfigManager instance;
 
+    /** 配置数据存储：Section -> (Key -> Value) 的二级Map结构 */
     private final Map<String, Map<String, String>> configMap = new HashMap<>();
+
+    /** 配置文件路径 */
     private final String configFilePath;
+
+    /** 数据库配置对象，由Mysql节自动初始化 */
     private DatabaseConfig databaseConfig;
 
+    /**
+     * 私有构造函数，默认加载config.ini
+     */
     private ConfigManager() {
         this("config.ini");
     }
 
+    /**
+     * 私有构造函数，指定配置文件路径
+     * 
+     * @param configFilePath 配置文件路径
+     */
     private ConfigManager(String configFilePath) {
         this.configFilePath = configFilePath;
         loadConfig();
@@ -33,7 +83,15 @@ public class ConfigManager {
     }
 
     /**
-     * 获取单例实例
+     * 获取单例实例（双重检查锁定DCL模式）
+     * <p>
+     * 线程安全说明：
+     * 1. 第一次检查：避免不必要的同步开销
+     * 2. synchronized块：确保只有一个线程创建实例
+     * 3. 第二次检查：避免多次创建实例
+     * 4. volatile关键字：防止指令重排序
+     * 
+     * @return ConfigManager单例实例
      */
     public static ConfigManager getInstance() {
         if (instance == null) {
@@ -48,6 +106,13 @@ public class ConfigManager {
 
     /**
      * 加载配置文件
+     * <p>
+     * 加载顺序：
+     * 1. 首先尝试从当前工作目录加载
+     * 2. 如果文件不存在，从classpath加载
+     * 3. 解析成功后存储到configMap中
+     * 
+     * @throws RuntimeException 如果配置文件加载失败
      */
     private void loadConfig() {
         System.out.println("Loading config from: " + configFilePath);
@@ -55,10 +120,12 @@ public class ConfigManager {
         try {
             Path path = Paths.get(configFilePath);
             if (Files.exists(path)) {
+                // 从文件系统加载
                 try (BufferedReader reader = Files.newBufferedReader(path)) {
                     parseConfig(reader);
                 }
             } else {
+                // 从classpath加载
                 loadFromClasspath();
             }
             System.out.println("Config loaded successfully");

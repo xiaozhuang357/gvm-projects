@@ -119,8 +119,6 @@
                                     </Label>
                                     <ComboBox fx:id="approvalStatusComboBox" prefWidth="150.0"
                                        promptText="全部状态" />
-                                    <ComboBox fx:id="approvalTypeComboBox" prefWidth="150.0"
-                                       promptText="全部类型" />
                                     <Button mnemonicParsing="false"
                                        onAction="#handleRefreshApprovals"
                                        style="-fx-background-color: #3498DB; -fx-background-radius: 5;"
