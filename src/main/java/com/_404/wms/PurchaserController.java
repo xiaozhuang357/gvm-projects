@@ -165,9 +165,13 @@ public class PurchaserController implements Initializable {
         orderIdField.setText(generateOrderId());
         orderIdField.setEditable(false);
 
-        // 初始化订单状态筛选下拉框
+        // 初始化订单状态筛选下拉框 - 简化为5个主要选项
         orderStatusCombo.setItems(FXCollections.observableArrayList(
-                "全部", "待提交", "待审批", "已批准", "已拒绝", "已完成"));
+                "全部",
+                "待审批",
+                "已通过",
+                "已退回",
+                "已到货"));
         orderStatusCombo.setValue("全部");
     }
 
@@ -794,7 +798,14 @@ public class PurchaserController implements Initializable {
 
     /**
      * 根据下拉框选择筛选订单列表。
-     * 更新 FilteredList 的 Predicate。
+     * 更新 FilteredList 的 Predicate，实现状态筛选。
+     * <p>
+     * 筛选规则:
+     * - "全部": 显示所有订单
+     * - "待审批": 显示"待部门经理审批"和"待总经理审批"状态的订单
+     * - "已通过": 显示"已批准"状态的订单
+     * - "已退回": 显示"已退回"状态的订单
+     * - "已完成": 显示"已完成"状态的订单
      */
     @FXML
     void handleFilterOrders(ActionEvent event) {
@@ -803,20 +814,38 @@ public class PurchaserController implements Initializable {
 
         String statusFilter = orderStatusCombo.getValue();
 
+        // 如果选择"全部"或未选择，显示所有订单
         if (statusFilter == null || "全部".equals(statusFilter)) {
             filteredOrders.setPredicate(order -> true);
             return;
         }
 
+        // 根据选择的筛选条件设置过滤规则
         filteredOrders.setPredicate(order -> {
-            String orderStatus = order.getStatus().getDisplayName();
-            // 简单匹配显示名称
-            if (orderStatus.equals(statusFilter) || orderStatus.contains(statusFilter)) {
-                return true;
+            PurchaseOrder.OrderStatus orderStatus = order.getStatus();
+            String statusName = orderStatus.getDisplayName();
+
+            switch (statusFilter) {
+                case "待审批":
+                    // 包含所有待审批状态
+                    return orderStatus == PurchaseOrder.OrderStatus.PENDING_DEPT_APPROVAL ||
+                            orderStatus == PurchaseOrder.OrderStatus.PENDING_GENERAL_APPROVAL;
+
+                case "已通过":
+                    // 只显示已批准的订单
+                    return orderStatus == PurchaseOrder.OrderStatus.APPROVED;
+
+                case "已退回":
+                    // 只显示已退回的订单
+                    return orderStatus == PurchaseOrder.OrderStatus.REJECTED;
+
+                case "已到货":
+                    // 只显示已到货的订单
+                    return orderStatus == PurchaseOrder.OrderStatus.ARRIVED;
+
+                default:
+                    return false;
             }
-            // 特殊处理：下拉框选"待审批"时，匹配所有含"待...审批"的状态
-            return "待审批".equals(statusFilter) &&
-                    (orderStatus.contains("待") && orderStatus.contains("审批"));
         });
     }
 

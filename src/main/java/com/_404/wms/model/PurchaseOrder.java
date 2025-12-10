@@ -109,9 +109,6 @@ public class PurchaseOrder implements Serializable {
      * - REJECTED:审批被退回,可修改后重新提交
      */
     public enum OrderStatus {
-        /** 草稿 - 订单正在编辑中 */
-        DRAFT("草稿"),
-
         /** 待提交 - 订单已保存但未提交审批 */
         PENDING_SUBMIT("待提交"),
 
@@ -127,17 +124,11 @@ public class PurchaseOrder implements Serializable {
         /** 已退回 - 审批未通过,需修改 */
         REJECTED("已退回"),
 
-        /** 运输中 - 供应商已发货 */
-        IN_TRANSIT("运输中"),
-
         /** 已到货 - 货物已送达,可生成入库单 */
         ARRIVED("已到货"),
 
         /** 已完成 - 入库完成,订单结束 */
-        COMPLETED("已完成"),
-
-        /** 已取消 - 订单取消,终止状态 */
-        CANCELLED("已取消");
+        COMPLETED("已完成");
 
         /** 状态中文显示名称 */
         private String displayName;
@@ -282,7 +273,6 @@ public class PurchaseOrder implements Serializable {
 
     public PurchaseOrder() {
         this.createTime = LocalDateTime.now();
-        this.status = OrderStatus.DRAFT;
         this.items = new ArrayList<>();
     }
 
